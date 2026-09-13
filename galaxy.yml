@@ -1,0 +1,14 @@
+---
+namespace: oreol
+name: cluster
+version: 0.1.0
+readme: README.md
+authors:
+  - Oreol
+description: Reusable Ansible automation for cluster configuration and management.
+license:
+  - MIT
+repository: https://github.com/oreolag/ansible-collection
+build_ignore:
+  - .DS_Store
+  - '**/.DS_Store'

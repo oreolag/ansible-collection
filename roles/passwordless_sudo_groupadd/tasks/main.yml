@@ -1,0 +1,55 @@
+---
+
+- name: Ensure group passwordless-sudo exists
+  ansible.builtin.group:
+    state: present
+    name: passwordless-sudo
+
+- name: Check if user exists
+  ansible.builtin.command: getent passwd "{{ item }}"
+  register: user_check
+  ignore_errors: true
+  changed_when: false
+  loop: "{{ users.passwordless_sudo }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Filter users that exist
+  ansible.builtin.set_fact:
+    existing_passwordless_sudo_users: >-
+      {{ users.passwordless_sudo | zip(user_check.results)
+        | selectattr('1.rc', 'equalto', 0)
+        | map('first') | list }}
+    missing_passwordless_sudo_users: >-
+      {{ users.passwordless_sudo | zip(user_check.results)
+        | rejectattr('1.rc', 'equalto', 0)
+        | map('first') | list }}
+
+- name: Update (remove all users from group passwordless-sudo first)
+  ansible.builtin.command: gpasswd -M "" passwordless-sudo
+  become: true
+  when:
+    - update | bool
+
+- name: Add users to group passwordless-sudo
+  ansible.builtin.user:
+    name: "{{ item }}"
+    append: true
+    groups: passwordless-sudo
+  loop: "{{ existing_passwordless_sudo_users }}"
+
+- name: Report missing users
+  ansible.builtin.debug:
+    msg: >-
+      Users '{{ missing_passwordless_sudo_users }}' do not exist (LDAP/local user not found).
+      Skipped.
+      Consider removing them from the 'users.passwordless_sudo' variable.
+  when: (missing_passwordless_sudo_users| length) > 0
+
+- name: Passwordless passwordless-sudo
+  ansible.builtin.copy:
+    content: |
+      %passwordless-sudo ALL=(ALL) NOPASSWD:ALL
+    dest: /etc/sudoers.d/passwordless-sudo
+    mode: "0440"
+    validate: "visudo -cf %s"
