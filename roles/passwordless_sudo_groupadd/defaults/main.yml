@@ -1,0 +1,3 @@
+---
+# When true, clear existing group membership before adding CMDB users.
+update: false
