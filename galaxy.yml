@@ -11,4 +11,4 @@ license:
 repository: https://github.com/oreolag/ansible-collection
 build_ignore:
   - .DS_Store
-  - '**/.DS_Store'
+  - "**/.DS_Store"
