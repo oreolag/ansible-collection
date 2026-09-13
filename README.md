@@ -1,7 +1,17 @@
-# ansible-collection
-This collection provides a series of roles, plugins, and modules to manage your NUMA cluster.
+<p align="right">
+<a href="https://oreol.ch">Oreol</a> <a href="https://github.com/oreolag/cli">CLI</a>
+</p>
 
-https://github.com/artis3n/ansible-collection-tailscale/tree/main
+<p align="center" style="margin-bottom: 0px;">
+  <img src="https://github.com/oreolag/ansible-collection/blob/main/oreol-logo-ansible.svg"
+       align="center" style="width: 200px; height: auto;">
+</p>
+
+<h1 align="center">
+  Ansible Collection
+</h1> 
+
+Reusable Ansible playbooks and roles for configuring and managing Linux clusters, maintained by Oreol. Apply shared automation across your hosts while keeping each cluster’s inventory, variables, and CMDB in its own repository.
 
 ## Install in your cluster repository
 
