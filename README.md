@@ -13,9 +13,33 @@
 
 Reusable Ansible playbooks and roles for configuring and managing Linux clusters, maintained by Oreol. Apply shared automation across your hosts while keeping each cluster’s inventory, variables, and CMDB in its own repository.
 
-## Install in your cluster repository
+## Oreol-managed clusters
 
-Create your own cluster repository containing its inventory, CMDB, and Ansible configuration. You do not need to clone this collection separately.
+Organizations that own an Oreol cluster receive a customized repository from Oreol, ready for co-managing their infrastructure in accordance with the management agreement between the parties.
+
+## Other users
+
+You can use this collection with your own cluster. Create a repository for its inventory, shared variables, and CMDB using the following example structure:
+
+```text
+my-cluster/
+├── README.md
+├── .gitignore
+├── ansible.cfg
+├── requirements.yml
+├── hosts
+├── group_vars/
+│   └── all.yml
+└── cmdb/
+    ├── node-01.yml
+    └── node-02.yml
+```
+
+Define your machines and host groups in `hosts`, and shared connection settings and role variables in `group_vars/all.yml`. Store machine-specific CMDB descriptions under `cmdb/`, using your own host names. Ansible loads inventory variables automatically; files under `cmdb/` are read only by operations that explicitly use them.
+
+This is a generic example: all cluster names, host details, and configuration belong in your own repository. You do not need to clone this collection separately.
+
+### Install the collection
 
 Add `requirements.yml` to your cluster repository:
 
@@ -35,14 +59,17 @@ ansible-galaxy collection install -r requirements.yml -p ./collections
 
 Ansible downloads the collection from GitHub and installs it as `oreol.cluster` under `collections/ansible_collections/oreol/cluster/`. This prepares the automation locally; it does not run any tasks on your hosts.
 
-Add this setting to your cluster's `ansible.cfg` under `[defaults]`:
+Configure the inventory and collection location in your cluster's `ansible.cfg`:
 
 ```ini
 [defaults]
+inventory = ./hosts
 collections_path = ./collections
 ```
 
 Add `/collections/` to your cluster's `.gitignore`, since this directory contains installed dependencies.
+
+### Update the collection
 
 To refresh the installed copy after changes are pushed to `main`:
 
