@@ -18,7 +18,7 @@
   </p>
 </h1>
 
-Reusable Ansible playbooks and roles for configuring and managing Linux clusters, maintained by Oreol. Apply shared automation across your hosts while keeping each cluster’s inventory, variables, and CMDB in its own repository.
+Reusable Ansible playbooks and roles for configuring and managing Linux and Oreol co-managed heterogeneous computing clusters. Apply shared automation across your hosts while keeping each cluster’s inventory, variables, and CMDB in its own repository.
 
 ## Oreol-managed clusters
 
