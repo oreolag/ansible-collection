@@ -8,7 +8,7 @@
 </p> -->
 
 <h1 align="center">
-  Ansible Collection
+  Oreol Ansible Collection
   <p align="center">
     <a href="https://galaxy.ansible.com/ui/repo/published/oreol/cluster/"><img src="https://img.shields.io/ansible/collection/d/oreol/cluster" alt="Ansible Collection Downloads" /></a>
     <a href="https://github.com/oreolag/ansible-collection/releases"><img src="https://img.shields.io/github/v/release/oreolag/ansible-collection" alt="Latest release" /></a>
