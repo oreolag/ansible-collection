@@ -2,10 +2,10 @@
 <a href="https://oreol.ch">Oreol</a> <a href="https://github.com/oreolag/cli">CLI</a>
 </p>
 
-<p align="center" style="margin-bottom: 0px;">
+<!-- <p align="center" style="margin-bottom: 0px;">
   <img src="https://github.com/oreolag/ansible-collection/blob/main/ansible_logo-removebg.png"
        align="center" style="width: 350px; height: auto;">
-</p>
+</p> -->
 
 <h1 align="center">
   Ansible Collection
