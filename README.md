@@ -4,7 +4,7 @@
 
 <p align="center" style="margin-bottom: 0px;">
   <img src="https://github.com/oreolag/ansible-collection/blob/main/ansible_logo-removebg.png"
-       align="center" style="width: 200px; height: auto;">
+       align="center" style="width: 300px; height: auto;">
 </p>
 
 <h1 align="center">
