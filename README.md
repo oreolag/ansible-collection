@@ -10,7 +10,7 @@
 <h1 align="center">
   Oreol Ansible Collection
   <p align="center">
-    <a href="https://galaxy.ansible.com/ui/repo/published/oreol/cluster/"><img src="https://img.shields.io/ansible/collection/d/oreol/cluster" alt="Ansible Collection Downloads" /></a>
+   <!--  <a href="https://galaxy.ansible.com/ui/repo/published/oreol/cluster/"><img src="https://img.shields.io/ansible/collection/d/oreol/cluster" alt="Ansible Collection Downloads" /></a> -->
     <a href="https://github.com/oreolag/ansible-collection/releases"><img src="https://img.shields.io/github/v/release/oreolag/ansible-collection" alt="Latest release" /></a>
     <a href="https://github.com/oreolag/ansible-collection/blob/main/LICENSE"><img src="https://img.shields.io/github/license/oreolag/ansible-collection" alt="License" /></a>
     <a href="https://github.com/oreolag/ansible-collection/graphs/contributors"><img src="https://img.shields.io/github/contributors/oreolag/ansible-collection?color=blue" alt="Contributors" /></a>
