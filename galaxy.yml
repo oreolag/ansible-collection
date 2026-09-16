@@ -1,6 +1,6 @@
 ---
 namespace: oreol
-name: cluster
+name: mgmt
 version: 0.1.0
 readme: README.md
 authors:
