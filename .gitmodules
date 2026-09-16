@@ -1,0 +1,3 @@
+[submodule "submodules/cli"]
+	path = submodules/cli
+	url = https://github.com/oreolag/cli.git
