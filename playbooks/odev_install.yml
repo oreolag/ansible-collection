@@ -1,3 +1,0 @@
----
-- name: Install odev using the bundled CLI installer
-  ansible.builtin.import_playbook: ../submodules/cli/install.yml

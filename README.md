@@ -86,28 +86,6 @@ ansible-galaxy collection install -r requirements.yml -p ./collections --force
 
 Local, unpushed changes to the source repository are not included. For reproducible installations, replace `main` with a published release tag or a specific commit.
 
-### Install odev
-
-The entry point is available when the installed collection includes the CLI submodule files:
-
-```bash
-ansible-playbook oreol.cluster.odev_install -e repo=true
-```
-
-Use `--limit <host-or-group>` to restrict the target hosts. No wrapper playbook or symlink is needed in your cluster repository.
-
-The collection playbook imports `install.yml` from the bundled CLI submodule. Installation logic stays in the CLI repository, shared with its standalone `install.sh` bootstrap. The imported playbook resolves its `vars.yml` alongside the CLI installer.
-
-`repo=true` selects the CLI installer's full installation mode, which replaces `/opt/odev` and clones the CLI's `main` branch on the target hosts. The collection pins the installer source; it does not pin the CLI version installed on the servers.
-
-Packaging is not yet complete: Galaxy installation directly from Git does not initialize this submodule, and building the current checkout encounters CLI symlinks into uninitialized nested submodules. The Git installation command above therefore does not yet provide a working odev installer. A bundled release artifact or another packaging adjustment is required.
-
-For collection development, initialize the pinned CLI checkout:
-
-```bash
-git submodule update --init submodules/cli
-```
-
 ## Citation
 
 [![ACM](https://img.shields.io/badge/ACM-10.1145%2F3805700-green)](https://doi.org/10.1145/3805700)
