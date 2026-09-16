@@ -31,20 +31,3 @@ ansible-galaxy collection install oreol.mgmt
 ```bash
 ansible-galaxy collection install oreol.mgmt --upgrade
 ```
-
-## Citation
-
-[![ACM](https://img.shields.io/badge/ACM-10.1145%2F3805700-green)](https://doi.org/10.1145/3805700)
-
-If you use Oreol Ansible Collection in your research, development, or publications, please cite the following reference:
-
-```bibtex
-@article{moya2026hacc,
-  author    = {Javier Moya and Matthias Gabathuler and Mario Ruiz and Gustavo Alonso},
-  title     = {A Development Platform for Managed Heterogeneous Accelerated Compute Clusters: A Case Study on ETH Zurich’s AMD HACC},
-  journal   = {ACM Transactions on Reconfigurable Technology and Systems},
-  year      = {2026},
-  doi       = {10.1145/3805700},
-  url       = {https://doi.org/10.1145/3805700}
-}
-```
