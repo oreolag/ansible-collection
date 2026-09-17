@@ -1,0 +1,3 @@
+---
+# Initial compatibility range: the ansible-core 2.21 series used for testing.
+requires_ansible: ">=2.21.0,<2.22.0"
