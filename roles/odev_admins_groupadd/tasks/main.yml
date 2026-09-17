@@ -1,0 +1,55 @@
+---
+
+- name: Ensure group odev-admins exists
+  ansible.builtin.group:
+    state: present
+    name: odev-admins
+
+- name: Check if user exists
+  ansible.builtin.command: getent passwd "{{ item }}"
+  register: user_check
+  ignore_errors: true
+  changed_when: false
+  loop: "{{ users.odev_admins }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Filter users that exist
+  ansible.builtin.set_fact:
+    existing_odev_admins_users: >-
+      {{ users.odev_admins | zip(user_check.results)
+        | selectattr('1.rc', 'equalto', 0)
+        | map('first') | list }}
+    missing_odev_admins_users: >-
+      {{ users.odev_admins | zip(user_check.results)
+        | rejectattr('1.rc', 'equalto', 0)
+        | map('first') | list }}
+
+- name: Update (remove all users from group odev-admins first)
+  ansible.builtin.command: gpasswd -M "" odev-admins
+  become: true
+  when:
+    - update | bool
+
+- name: Add users to group odev-admins
+  ansible.builtin.user:
+    name: "{{ item }}"
+    append: true
+    groups: odev-admins
+  loop: "{{ existing_odev_admins_users }}"
+
+- name: Report missing users
+  ansible.builtin.debug:
+    msg: >-
+      Users '{{ missing_odev_admins_users }}' do not exist (LDAP/local user not found).
+      Skipped.
+      Consider removing them from the 'users.odev_admins' variable.
+  when: (missing_odev_admins_users| length) > 0
+
+#- name: Setup sudo capabilities of odev-admins group in /etc/sudoers.d
+#  ansible.builtin.copy:
+#    content: |
+#      %odev-admins ALL=(ALL) NOPASSWD: \
+#        /opt/odev/src/cp.sh
+#    dest: /etc/sudoers.d/odev-admins
+#    mode: 0644

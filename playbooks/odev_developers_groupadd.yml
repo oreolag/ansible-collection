@@ -1,0 +1,15 @@
+---
+- name: Configure odev-developers group
+  hosts: "{{ oreol_target }}"
+  become: true
+
+  pre_tasks:
+    - name: Show control variables
+      ansible.builtin.debug:
+        msg:
+          - "update={{ update }}"
+      run_once: true
+      delegate_to: localhost
+
+  roles:
+    - oreol.mgmt.odev_developers_groupadd
