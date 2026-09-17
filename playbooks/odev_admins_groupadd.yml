@@ -2,6 +2,7 @@
 - name: Configure odev-admins group
   hosts: "{{ oreol_target }}"
   become: true
+  ignore_errors: true
 
   pre_tasks:
     - name: Show control variables
