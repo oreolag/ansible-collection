@@ -59,6 +59,13 @@ The role can also be used in a larger playbook:
     - oreol.mgmt.login_useradd
 ```
 
+## Removing users
+
+To delete accounts and their home directories, use the complementary
+[login_userdelete role](../login_userdelete/README.md) with `users.login_deleted`.
+Removing a name or public-key file from this role's inputs does not revoke
+existing access.
+
 ## License
 
 MIT, as specified in the collection's LICENSE file.

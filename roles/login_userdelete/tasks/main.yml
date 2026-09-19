@@ -1,0 +1,7 @@
+---
+- name: Remove users and their home folder
+  ansible.builtin.user:
+    name: "{{ item }}"
+    state: absent
+    remove: true
+  loop: "{{ users.login_deleted | default([]) }}"
