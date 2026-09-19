@@ -1,0 +1,7 @@
+---
+- name: Delete login users
+  hosts: "{{ oreol_target }}"
+  become: true
+
+  roles:
+    - oreol.mgmt.login_userdelete
