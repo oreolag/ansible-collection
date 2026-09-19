@@ -9,6 +9,8 @@ description: Reusable Ansible automation for cluster configuration and managemen
 license:
   - MIT
 repository: https://github.com/oreolag/ansible-collection
+dependencies:
+  ansible.posix: ">=1.0.0"
 build_ignore:
   - .DS_Store
   - "**/.DS_Store"

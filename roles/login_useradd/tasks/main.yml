@@ -1,0 +1,19 @@
+---
+- name: Add users with home folder
+  ansible.builtin.user:
+    name: "{{ item }}"
+    state: present
+    create_home: true
+    shell: /bin/bash
+  loop: "{{ users.login | default([]) }}"
+
+- name: Install SSH keys (if provided)
+  ansible.posix.authorized_key:
+    user: "{{ item }}"
+    key: "{{ login_useradd_public_key }}"
+  vars:
+    login_useradd_public_key: >-
+      {{ lookup('ansible.builtin.file', inventory_dir ~ '/keys/' ~ item ~ '.pub',
+                errors='ignore') | default('', true) }}
+  loop: "{{ users.login | default([]) }}"
+  when: login_useradd_public_key | length > 0
