@@ -1,7 +1,8 @@
 # Login users
 
-Create the users listed in `users.login`, with home directories and `/bin/bash`
-as their shell. Install their SSH public keys when provided. Existing authorized
+Create users listed in `users.login` only when a matching, non-empty public-key
+file exists. Create their home directories, set `/bin/bash` as their shell, and
+install their SSH public keys. Existing authorized
 keys are preserved, and users omitted from the list are not removed.
 
 ## Requirements
@@ -23,10 +24,11 @@ users:
 
 An absent or empty `users.login` list performs no work.
 
-Optionally put each user's public key in `keys/<username>.pub` beside the
+Put each user's public key in `keys/<username>.pub` beside the
 inventory file, for example `mgmt/keys/example_user.pub`. Files are read on the
 controller using `inventory_dir`, not from the installed collection. Missing or
-empty key files are skipped; the user is still created.
+empty key files cause the user to be reported and skipped: neither the account
+nor its SSH keys are changed. Whitespace-only files are also treated as empty.
 
 ## Usage
 

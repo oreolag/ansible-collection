@@ -1,0 +1,23 @@
+---
+- name: Report users without a public key
+  ansible.builtin.debug:
+    msg: >-
+      Skipping user '{{ login_useradd_username }}':
+      keys/{{ login_useradd_username }}.pub is missing or empty.
+      No account or SSH keys were changed for this user.
+  when: login_useradd_public_key | trim | length == 0
+
+- name: Configure user with a public key
+  when: login_useradd_public_key | trim | length > 0
+  block:
+    - name: Add user with home folder
+      ansible.builtin.user:
+        name: "{{ login_useradd_username }}"
+        state: present
+        create_home: true
+        shell: /bin/bash
+
+    - name: Install SSH key
+      ansible.posix.authorized_key:
+        user: "{{ login_useradd_username }}"
+        key: "{{ login_useradd_public_key }}"
