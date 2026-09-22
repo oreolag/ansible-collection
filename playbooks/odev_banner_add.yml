@@ -1,0 +1,7 @@
+---
+- name: Install Oreol banner
+  hosts: "{{ oreol_target }}"
+  become: true
+
+  roles:
+    - oreol.mgmt.odev_banner_add

@@ -1,0 +1,6 @@
+---
+- name: Copy banner
+  ansible.builtin.copy:
+    src: "{{ inventory_dir }}/odev_banner.sh"
+    dest: "{{ banner.remote_path }}/odev_banner.sh"
+    mode: "0755"
