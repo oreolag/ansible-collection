@@ -1,0 +1,37 @@
+---
+- name: Ensure dpkg is configured
+  ansible.builtin.command: dpkg --configure -a
+  changed_when: false
+
+- name: Update APT cache
+  ansible.builtin.apt:
+    update_cache: true
+
+- name: Upgrade installed packages
+  ansible.builtin.apt:
+    upgrade: dist
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+  register: ubuntu_update_packages
+
+- name: Refresh firmware metadata
+  ansible.builtin.command: fwupdmgr refresh --force
+  changed_when: false
+
+- name: Check for firmware updates
+  ansible.builtin.command: fwupdmgr get-updates
+  register: ubuntu_update_firmware_check
+  changed_when: false
+  failed_when: ubuntu_update_firmware_check.rc not in [0, 2]
+
+- name: Apply firmware updates
+  ansible.builtin.command: fwupdmgr update --assume-yes --no-reboot
+  register: ubuntu_update_firmware_result
+  changed_when: ubuntu_update_firmware_result.rc == 0
+  failed_when: ubuntu_update_firmware_result.rc not in [0, 2]
+  when: ubuntu_update_firmware_check.rc | default(2) == 0
+
+- name: Reboot after package or firmware updates
+  ansible.builtin.reboot:
+    reboot_timeout: 1800
+  when: ubuntu_update_packages.changed or ubuntu_update_firmware_result.changed

@@ -1,0 +1,7 @@
+---
+- name: Update Ubuntu
+  hosts: "{{ oreol_target }}"
+  become: true
+
+  roles:
+    - oreol.mgmt.ubuntu_update
