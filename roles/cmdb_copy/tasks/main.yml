@@ -1,0 +1,21 @@
+---
+- name: Ensure CMDB destination folder exists
+  ansible.builtin.file:
+    path: "{{ cmdb.remote_path }}/cmdb"
+    state: directory
+    mode: "0755"
+
+- name: Copy all CMDB data folder
+  ansible.builtin.copy:
+    src: "{{ inventory_dir }}/cmdb/"
+    dest: "{{ cmdb.remote_path }}/cmdb/"
+
+- name: Remove file for inventory_hostname_short (if present)
+  ansible.builtin.file:
+    path: "{{ cmdb.remote_path }}/cmdb/{{ inventory_hostname_short }}.yml"
+    state: absent
+
+- name: Copy host CMDB file to {{ cmdb.remote_path }}
+  ansible.builtin.copy:
+    src: "{{ inventory_dir }}/cmdb/{{ inventory_hostname_short }}.yml"
+    dest: "{{ cmdb.remote_path }}/{{ inventory_hostname_short }}.yml"

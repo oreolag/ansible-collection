@@ -1,0 +1,7 @@
+---
+- name: Copy CMDB data
+  hosts: "{{ oreol_target }}"
+  become: true
+
+  roles:
+    - oreol.mgmt.cmdb_copy
