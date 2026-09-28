@@ -1,4 +1,9 @@
 ---
+- name: Remove previous CMDB destination folder and contents
+  ansible.builtin.file:
+    path: "{{ cmdb.remote_path }}/cmdb"
+    state: absent
+
 - name: Ensure CMDB destination folder exists
   ansible.builtin.file:
     path: "{{ cmdb.remote_path }}/cmdb"
