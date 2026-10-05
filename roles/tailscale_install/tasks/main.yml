@@ -1,0 +1,113 @@
+---
+- name: Check supported operating system
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] in ['Ubuntu', 'Debian']
+    fail_msg: "Tailscale installation requires Ubuntu or Debian"
+
+- name: Install repository prerequisites
+  ansible.builtin.apt:
+    name: ca-certificates
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create package keyring directory
+  ansible.builtin.file:
+    path: /usr/share/keyrings
+    state: directory
+    mode: "0755"
+
+- name: Add Tailscale package signing key
+  ansible.builtin.get_url:
+    url: "https://pkgs.tailscale.com/stable/{{ ansible_facts['distribution'] | lower }}/{{ ansible_facts['distribution_release'] }}.noarmor.gpg"
+    dest: /usr/share/keyrings/tailscale-archive-keyring.gpg
+    mode: "0644"
+
+- name: Add Tailscale package repository
+  ansible.builtin.get_url:
+    url: "https://pkgs.tailscale.com/stable/{{ ansible_facts['distribution'] | lower }}/{{ ansible_facts['distribution_release'] }}.tailscale-keyring.list"
+    dest: /etc/apt/sources.list.d/tailscale.list
+    mode: "0644"
+  register: tailscale_repository
+
+- name: Install Tailscale
+  ansible.builtin.apt:
+    name: tailscale
+    state: present
+    update_cache: "{{ tailscale_repository.changed }}"
+
+- name: Enable and start Tailscale
+  ansible.builtin.systemd_service:
+    name: tailscaled
+    enabled: true
+    state: started
+
+- name: Configure Tailscale authentication
+  when: not ansible_check_mode
+  block:
+    - name: Read Tailscale status
+      ansible.builtin.command:
+        argv: [tailscale, status, --json]
+      register: tailscale_status
+      changed_when: false
+
+    - name: Record Tailscale state
+      ansible.builtin.set_fact:
+        tailscale_backend_state: "{{ (tailscale_status.stdout | from_json).BackendState }}"
+
+    - name: Enroll unauthenticated machine
+      when: tailscale_backend_state == 'NeedsLogin'
+      block:
+        - name: Require Tailscale auth key
+          ansible.builtin.assert:
+            that:
+              - tailscale.auth_key | default('') | trim | length > 0
+          no_log: true
+
+        - name: Create temporary auth key file
+          ansible.builtin.tempfile:
+            state: file
+            prefix: tailscale-auth-
+          register: tailscale_auth_file
+
+        - name: Write temporary auth key
+          ansible.builtin.copy:
+            content: "{{ tailscale.auth_key | trim }}"
+            dest: "{{ tailscale_auth_file.path }}"
+            owner: root
+            group: root
+            mode: "0600"
+          no_log: true
+          diff: false
+
+        - name: Authenticate Tailscale
+          ansible.builtin.command:
+            argv:
+              - tailscale
+              - up
+              - "--auth-key=file:{{ tailscale_auth_file.path }}"
+              - --timeout=60s
+          changed_when: true
+          no_log: true
+      always:
+        - name: Remove temporary auth key
+          ansible.builtin.file:
+            path: "{{ tailscale_auth_file.path }}"
+            state: absent
+          when: tailscale_auth_file is defined and tailscale_auth_file.path is defined
+
+    - name: Bring up an authenticated but stopped machine
+      ansible.builtin.command:
+        argv: [tailscale, up, --timeout=60s]
+      when: tailscale_backend_state == 'Stopped'
+      changed_when: true
+
+    - name: Verify Tailscale is running
+      ansible.builtin.command:
+        argv: [tailscale, status, --json]
+      register: tailscale_final_status
+      changed_when: false
+      until: (tailscale_final_status.stdout | from_json).BackendState == 'Running'
+      retries: 5
+      delay: 2
