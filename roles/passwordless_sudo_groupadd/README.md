@@ -8,16 +8,15 @@ Linux hosts with `getent`, `gpasswd`, sudo, and `visudo` installed, and an exist
 
 ## Variables
 
-- `users.passwordless_sudo` (required): a list of existing usernames. Missing users are reported and skipped; the role does not create them.
-- `update` (default: `false`): when false, preserve existing group members and add the listed users. When true, clear supplementary group membership first, then add the listed users that exist. An empty list with `update: true` clears supplementary membership.
+- `users.passwordless_sudo` (default: empty): a list of `{name, state}` entries for existing users. Missing users are reported and skipped; the role does not create them.
 
 Example cluster inventory variables:
 
 ```yaml
 users:
   passwordless_sudo:
-    - example_user
-update: false
+    - name: example_user
+      state: present
 ```
 
 ## Usage
@@ -37,7 +36,6 @@ Or invoke the collection playbook with your inventory:
 ansible-playbook oreol.mgmt.passwordless_sudo_groupadd -i hosts -e oreol_target=managed_hosts
 ```
 
-Append `-e update=true` to clear membership before adding CMDB users. The reset is not atomic: a failure after clearing membership can leave the group empty or partially populated.
 
 ## Sudo configuration
 
@@ -50,3 +48,9 @@ The role writes `/etc/sudoers.d/passwordless-sudo`, owned by root with mode `044
 ## License
 
 MIT, as specified in the collection's LICENSE file.
+
+Entries require `name` and `state: present` or `state: absent`; plain usernames
+are not supported. Present adds supplementary membership; absent removes only
+that membership, preserving the account and its other groups. Primary group
+membership is not managed. Omitted users are preserved.
+See `defaults/main.yml` for inventory examples and the empty-list fallback.

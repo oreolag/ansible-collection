@@ -8,16 +8,15 @@ Linux hosts with `getent` and `gpasswd` installed. Run with root privileges, eit
 
 ## Variables
 
-- `users.odev_admins` (required): a list of existing usernames. Missing users are reported and skipped.
-- `update` (default: `false`): preserve existing group members and add the listed users. When true, clear supplementary group membership first, then add the listed users that exist. An empty list with `update: true` clears supplementary membership.
+- `users.odev_admins` (default: empty): a list of `{name, state}` entries for existing users. Missing users are reported and skipped.
 
 Example inventory variables:
 
 ```yaml
 users:
   odev_admins:
-    - example_user
-update: false
+    - name: example_user
+      state: present
 ```
 
 ## Usage
@@ -39,10 +38,15 @@ ansible-playbook oreol.mgmt.odev_admins_groupadd -i hosts -e oreol_target=manage
 
 Supply cluster variables through inventory or `-e @vars.yml`, and configure connection and privilege escalation settings in your inventory as needed.
 
-Append `-e update=true` to clear membership before adding CMDB users. The reset is not atomic: a failure after clearing membership can leave the group empty or partially populated.
 
-The tasks are copied unchanged from `ansible-playbooks/tasks/odev-admins-groupadd.yml`, including the commented-out sudo configuration. This role does not configure sudo permissions.
+This role does not configure sudo permissions.
 
 ## License
 
 MIT, as specified in the collection's LICENSE file.
+
+Entries require `name` and `state: present` or `state: absent`; plain usernames
+are not supported. Present adds supplementary membership; absent removes only
+that membership, preserving the account and its other groups. Primary group
+membership is not managed. Omitted users are preserved.
+See `defaults/main.yml` for inventory examples and the empty-list fallback.

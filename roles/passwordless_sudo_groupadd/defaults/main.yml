@@ -1,3 +1,11 @@
 ---
-# When true, clear existing group membership before adding CMDB users.
-update: false
+
+# Inventory example (group_vars/all/users.yml):
+# users:
+#   passwordless_sudo:
+#     - name: example_user
+#       state: present
+#     - name: former_user
+#       state: absent
+# Missing lists default to no managed users.
+passwordless_sudo_groupadd_users: "{{ users.passwordless_sudo | default([]) }}"

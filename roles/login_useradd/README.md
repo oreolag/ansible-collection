@@ -1,6 +1,6 @@
 # Login users
 
-Create users listed in `users.login` only when a matching, non-empty public-key
+Create users marked `state: present` in `users.login` only when a matching, non-empty public-key
 file exists. Create their home directories, set `/bin/bash` as their shell, and
 install their SSH public keys. Existing authorized
 keys are preserved, and users omitted from the list are not removed.
@@ -14,12 +14,15 @@ for its `authorized_key` module.
 ## Variables and keys
 
 Add `login` to the existing `users` mapping in your administration repository's
-`group_vars/all.yml`:
+`group_vars/all/users.yml`:
 
 ```yaml
 users:
   login:
-    - example_user
+    - name: example_user
+      state: present
+    - name: former_user
+      state: absent
 ```
 
 An absent or empty `users.login` list performs no work.
@@ -27,7 +30,7 @@ An absent or empty `users.login` list performs no work.
 Put each user's public key in `keys/<username>.pub` beside the
 inventory file, for example `mgmt/keys/example_user.pub`. Files are read on the
 controller using `inventory_dir`, not from the installed collection. Missing or
-empty key files cause the user to be reported and skipped: neither the account
+empty key files for present entries cause the user to be reported and skipped: neither the account
 nor its SSH keys are changed. Whitespace-only files are also treated as empty.
 
 ## Usage
@@ -61,11 +64,15 @@ The role can also be used in a larger playbook:
 
 ## Removing users
 
-To delete accounts and their home directories, use the complementary
-[login_userdelete role](../login_userdelete/README.md) with `users.login_deleted`.
+This same role deletes accounts marked `state: absent` in `users.login`, including
+their home directories and mail spools. No public key is required for deletion.
+Files owned by these users elsewhere are not automatically removed.
 Removing a name or public-key file from this role's inputs does not revoke
 existing access.
 
 ## License
 
 MIT, as specified in the collection's LICENSE file.
+
+Entries require `name` and an explicit `state`; plain usernames are not supported.
+The role processes both states in one run. See `defaults/main.yml` for examples.

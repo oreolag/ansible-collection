@@ -1,5 +1,5 @@
 ---
-- name: Create login users
+- name: Manage login users
   hosts: "{{ oreol_target }}"
   become: true
 

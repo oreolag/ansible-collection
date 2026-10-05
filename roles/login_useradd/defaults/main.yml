@@ -2,10 +2,10 @@
 
 # Inventory example (group_vars/all/users.yml):
 # users:
-#   odev_users:
+#   login:
 #     - name: example_user
 #       state: present
 #     - name: former_user
 #       state: absent
 # Missing lists default to no managed users.
-odev_users_groupadd_users: "{{ users.odev_users | default([]) }}"
+login_useradd_users: "{{ users.login | default([]) }}"

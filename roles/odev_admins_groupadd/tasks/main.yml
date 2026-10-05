@@ -1,4 +1,16 @@
 ---
+- name: Validate user names and explicit states
+  ansible.builtin.assert:
+    that:
+      - item is mapping
+      - item.name is defined
+      - item.name is string
+      - item.name is match('^[a-z_][a-z0-9_-]*[$]?$')
+      - item.state is defined
+      - item.state in ['present', 'absent']
+    fail_msg: "Each user must have a valid name and state (present or absent)."
+  loop: "{{ odev_admins_groupadd_users }}"
+
 
 - name: Ensure group odev-admins exists
   ansible.builtin.group:
@@ -6,44 +18,54 @@
     name: odev-admins
 
 - name: Check if user exists
-  ansible.builtin.command: getent passwd "{{ item }}"
+  ansible.builtin.command: getent passwd "{{ item.name }}"
   register: user_check
-  ignore_errors: true
+  failed_when: user_check.rc not in [0, 2]
+  check_mode: false
   changed_when: false
-  loop: "{{ users.odev_admins }}"
+  loop: "{{ odev_admins_groupadd_users }}"
   loop_control:
-    label: "{{ item }}"
+    label: "{{ item.name }}"
 
 - name: Filter users that exist
   ansible.builtin.set_fact:
     existing_odev_admins_users: >-
-      {{ users.odev_admins | zip(user_check.results)
+      {{ odev_admins_groupadd_users | zip(user_check.results)
         | selectattr('1.rc', 'equalto', 0)
         | map('first') | list }}
     missing_odev_admins_users: >-
-      {{ users.odev_admins | zip(user_check.results)
+      {{ odev_admins_groupadd_users | zip(user_check.results)
         | rejectattr('1.rc', 'equalto', 0)
         | map('first') | list }}
 
-- name: Update (remove all users from group odev-admins first)
-  ansible.builtin.command: gpasswd -M "" odev-admins
-  become: true
-  when:
-    - update | bool
-
 - name: Add users to group odev-admins
   ansible.builtin.user:
-    name: "{{ item }}"
+    name: "{{ item.name }}"
     append: true
     groups: odev-admins
   loop: "{{ existing_odev_admins_users }}"
+  when: item.state == 'present'
+
+- name: Read current odev-admins supplementary members
+  ansible.builtin.getent:
+    database: group
+    key: odev-admins
+
+- name: Remove users marked absent from odev-admins
+  ansible.builtin.command:
+    argv: [gpasswd, -d, "{{ item.name }}", odev-admins]
+  loop: "{{ odev_admins_groupadd_users }}"
+  when:
+    - item.state == 'absent'
+    - item.name in ansible_facts.getent_group['odev-admins'][2].split(',')
+  changed_when: true
 
 - name: Report missing users
   ansible.builtin.debug:
     msg: >-
       Users '{{ missing_odev_admins_users }}' do not exist (LDAP/local user not found).
       Skipped.
-      Consider removing them from the 'users.odev_admins' variable.
+      Consider removing them from the 'odev_admins_groupadd_users' variable.
   when: (missing_odev_admins_users| length) > 0
 
 #- name: Setup sudo capabilities of odev-admins group in /etc/sudoers.d

@@ -1,10 +1,30 @@
 ---
+- name: Validate user names and explicit states
+  ansible.builtin.assert:
+    that:
+      - item is mapping
+      - item.name is defined
+      - item.name is string
+      - item.name is match('^[a-z_][a-z0-9_-]*[$]?$')
+      - item.state is defined
+      - item.state in ['present', 'absent']
+    fail_msg: "Each user must have a valid name and state (present or absent)."
+  loop: "{{ login_useradd_users }}"
+
 - name: Configure login users with matching public keys
   ansible.builtin.include_tasks: user.yml
-  loop: "{{ users.login | default([]) }}"
+  loop: "{{ login_useradd_users | selectattr('state', 'equalto', 'present') | map(attribute='name') | list }}"
   loop_control:
     loop_var: login_useradd_username
   vars:
     login_useradd_public_key: >-
       {{ lookup('ansible.builtin.file', inventory_dir ~ '/keys/' ~ login_useradd_username ~ '.pub',
                 errors='ignore') | default('', true) }}
+
+- name: Remove users marked absent and their home folder
+  ansible.builtin.user:
+    name: "{{ item.name }}"
+    state: absent
+    remove: true
+  loop: "{{ login_useradd_users }}"
+  when: item.state == 'absent'
