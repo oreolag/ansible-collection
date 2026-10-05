@@ -14,3 +14,17 @@ The updated mgmt wrapper prompts for the Vault password automatically unless an
 explicit Vault option or `ANSIBLE_VAULT_PASSWORD_FILE` is supplied.
 
 Check mode previews package configuration but does not enroll machines.
+
+## Tailscale SSH
+
+Tailscale SSH is enabled by default on both newly enrolled and existing machines.
+The role checks the current preference and uses `tailscale set --ssh=true` only
+when needed, preserving other Tailscale preferences.
+
+Set `tailscale_install_ssh: false` in your inventory to disable it.
+Your tailnet policy must permit network access and Tailscale SSH for the requested
+user. Tailscale SSH handles port 22 on the Tailscale address; OpenSSH on the LAN
+address remains available. Enabling it can interrupt existing SSH connections
+using the Tailscale address, so apply this via LAN or your Incus jump connection.
+
+See [Tailscale SSH](https://tailscale.com/docs/features/tailscale-ssh).

@@ -111,3 +111,19 @@
       until: (tailscale_final_status.stdout | from_json).BackendState == 'Running'
       retries: 5
       delay: 2
+
+    - name: Read Tailscale SSH preference
+      ansible.builtin.command:
+        argv: [tailscale, debug, prefs]
+      register: tailscale_preferences
+      changed_when: false
+      no_log: true
+
+    - name: Configure Tailscale SSH
+      ansible.builtin.command:
+        argv:
+          - tailscale
+          - set
+          - "--ssh={{ tailscale_install_ssh | bool | ternary('true', 'false') }}"
+      when: (tailscale_preferences.stdout | from_json).RunSSH != (tailscale_install_ssh | bool)
+      changed_when: true

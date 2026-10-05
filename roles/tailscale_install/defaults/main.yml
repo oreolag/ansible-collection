@@ -1,0 +1,3 @@
+---
+# Enable Tailscale SSH. Access is governed by the tailnet's SSH policy.
+tailscale_install_ssh: true
