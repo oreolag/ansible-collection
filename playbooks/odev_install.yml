@@ -1,0 +1,8 @@
+---
+- name: Install Oreol CLI
+  hosts: "{{ oreol_target }}"
+  become: true
+  gather_facts: true
+
+  roles:
+    - oreol.mgmt.odev_install

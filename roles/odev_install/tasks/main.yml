@@ -1,0 +1,38 @@
+---
+- name: Check supported operating system
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Ubuntu'
+    fail_msg: "Error: odev requires Ubuntu"
+
+- name: Run Oreol CLI installer
+  when: not ansible_check_mode
+  block:
+    - name: Create temporary installer file
+      ansible.builtin.tempfile:
+        state: file
+        suffix: -odev-install.sh
+      register: odev_install_file
+
+    - name: Download Oreol CLI installer
+      ansible.builtin.get_url:
+        url: "{{ odev_install_url }}"
+        dest: "{{ odev_install_file.path }}"
+        headers:
+          Cache-Control: no-cache
+        force: true
+        mode: "0600"
+
+    - name: Execute Oreol CLI installer
+      ansible.builtin.command:
+        argv: [bash, "{{ odev_install_file.path }}"]
+      environment:
+        TERM: xterm
+        DEBIAN_FRONTEND: noninteractive
+      changed_when: true
+  always:
+    - name: Remove temporary installer file
+      ansible.builtin.file:
+        path: "{{ odev_install_file.path }}"
+        state: absent
+      when: odev_install_file is defined and odev_install_file.path is defined

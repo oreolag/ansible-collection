@@ -1,0 +1,3 @@
+---
+# Installer downloaded and executed on each target server.
+odev_install_url: https://oreol.ch/cli/install.sh
