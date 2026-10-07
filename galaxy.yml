@@ -10,6 +10,7 @@ license:
   - MIT
 repository: https://github.com/oreolag/ansible-collection
 dependencies:
+  community.general: ">=9.5.0"
   ansible.posix: ">=1.0.0"
 build_ignore:
   - .DS_Store

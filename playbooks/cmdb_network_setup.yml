@@ -1,0 +1,7 @@
+---
+- name: Configure networking from CMDB
+  hosts: "{{ oreol_target }}"
+  become: true
+  gather_facts: false
+  roles:
+    - oreol.mgmt.cmdb_network_setup

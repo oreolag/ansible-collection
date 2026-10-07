@@ -1,0 +1,13 @@
+---
+- name: Validate device list
+  ansible.builtin.assert:
+    that:
+      - cmdb_network_data.devices[cmdb_network_category] | default([]) is sequence
+      - cmdb_network_data.devices[cmdb_network_category] | default([]) is not string
+      - cmdb_network_data.devices[cmdb_network_category] | default([]) is not mapping
+
+- name: Collect device ports
+  ansible.builtin.include_tasks: ports.yml
+  loop: "{{ cmdb_network_data.devices[cmdb_network_category] | default([]) }}"
+  loop_control:
+    loop_var: cmdb_network_device

@@ -1,0 +1,28 @@
+---
+- name: Ensure persistent connection matched by MAC
+  community.general.nmcli:
+    conn_name: "{{ cmdb_network_port.connection }}"
+    type: ethernet
+    ifname: '*'
+    mac: "{{ cmdb_network_port.mac }}"
+    autoconnect: true
+    method4: manual
+    ip4: "{{ cmdb_network_port.ip_address }}/{{ cmdb_network_port.ip_mask }}"
+    method6: disabled
+    state: present
+  register: cmdb_network_connection
+
+- name: Read active connection names
+  ansible.builtin.command:
+    argv: [nmcli, --terse, --fields, NAME, connection, show, --active]
+  register: cmdb_network_active
+  changed_when: false
+  check_mode: false
+
+- name: Activate new, changed or inactive connection
+  ansible.builtin.command:
+    argv: [nmcli, --wait, '30', connection, up, "{{ cmdb_network_port.connection }}"]
+  when:
+    - not ansible_check_mode
+    - cmdb_network_connection.changed or cmdb_network_port.connection not in cmdb_network_active.stdout_lines
+  changed_when: true

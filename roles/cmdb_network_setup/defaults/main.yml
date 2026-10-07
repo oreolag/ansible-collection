@@ -1,0 +1,4 @@
+---
+cmdb_network_setup_file: "{{ cmdb.remote_path | default('/opt') }}/{{ inventory_hostname_short }}.yml"
+# endata uses uplinks; enmgmt uses access. Management networking is opt-in.
+cmdb_network_setup_device_types: [endata]

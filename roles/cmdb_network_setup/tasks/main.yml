@@ -1,0 +1,71 @@
+---
+- name: Validate selected device types
+  ansible.builtin.assert:
+    that:
+      - cmdb_network_setup_device_types is sequence
+      - cmdb_network_setup_device_types is not string
+      - cmdb_network_setup_device_types | difference(['endata', 'enmgmt']) | length == 0
+
+- name: Check CMDB file for server exists
+  ansible.builtin.stat:
+    path: "{{ cmdb_network_setup_file }}"
+  register: cmdb_network_file
+  failed_when: not cmdb_network_file.stat.exists or not (cmdb_network_file.stat.isreg | default(false))
+
+- name: Read host CMDB from server
+  ansible.builtin.slurp:
+    src: "{{ cmdb_network_setup_file }}"
+  register: cmdb_network_raw
+
+- name: Parse host CMDB
+  ansible.builtin.set_fact:
+    cmdb_network_data: "{{ cmdb_network_raw.content | b64decode | from_yaml }}"
+    cmdb_network_ports: []
+
+- name: Validate CMDB structure
+  ansible.builtin.assert:
+    that:
+      - cmdb_network_data is mapping
+      - cmdb_network_data.devices is mapping
+
+- name: Collect selected devices and ports
+  ansible.builtin.include_tasks: devices.yml
+  loop: "{{ cmdb_network_setup_device_types }}"
+  loop_control:
+    loop_var: cmdb_network_category
+
+- name: Validate configured port addresses
+  ansible.builtin.assert:
+    that:
+      - item.name is string and item.name | length > 0
+      - item.mac is string and item.mac is match('^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$')
+      - item.ip_address is string and item.ip_address is match('^((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])[.]){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])$')
+      - item.ip_mask | string is match('^([0-9]|[12][0-9]|3[0-2])$')
+    fail_msg: "Invalid network configuration for {{ item.connection }}"
+  loop: "{{ cmdb_network_ports }}"
+  loop_control:
+    label: "{{ item.connection }}"
+
+- name: Require unique managed connections and MAC addresses
+  ansible.builtin.assert:
+    that:
+      - cmdb_network_ports | map(attribute='connection') | unique | list | length == cmdb_network_ports | length
+      - cmdb_network_ports | map(attribute='mac') | map('lower') | unique | list | length == cmdb_network_ports | length
+
+- name: Check NetworkManager is running
+  ansible.builtin.command:
+    argv: [nmcli, --terse, --fields, RUNNING, general]
+  environment:
+    LC_ALL: C
+  register: cmdb_network_manager
+  changed_when: false
+  check_mode: false
+  failed_when: cmdb_network_manager.rc != 0 or cmdb_network_manager.stdout | trim != 'running'
+  when: cmdb_network_ports | length > 0
+
+- name: Configure selected ports
+  ansible.builtin.include_tasks: configure.yml
+  loop: "{{ cmdb_network_ports }}"
+  loop_control:
+    loop_var: cmdb_network_port
+    label: "{{ cmdb_network_port.connection }}"

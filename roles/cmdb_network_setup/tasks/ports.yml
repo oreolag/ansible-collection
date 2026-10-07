@@ -1,0 +1,24 @@
+---
+- name: Validate device ID and port list
+  vars:
+    port_key: "{{ 'uplinks' if cmdb_network_category == 'endata' else 'access' }}"
+  ansible.builtin.assert:
+    that:
+      - cmdb_network_device.id | string is match('^[0-9]+$')
+      - cmdb_network_device[port_key] is sequence
+      - cmdb_network_device[port_key] is not string
+      - cmdb_network_device[port_key] is not mapping
+
+- name: Validate port IDs and address pairs
+  ansible.builtin.assert:
+    that:
+      - item.id | string is match('^[0-9]+$')
+      - (item.ip_address | default('', true) | string | length > 0) == (item.ip_mask | default('') is not none and item.ip_mask | default('') | string | length > 0)
+    fail_msg: "Each port needs an ID and either both ip_address/ip_mask or neither."
+  loop: "{{ cmdb_network_device['uplinks' if cmdb_network_category == 'endata' else 'access'] }}"
+
+- name: Collect ports with a configured IP address
+  ansible.builtin.set_fact:
+    cmdb_network_ports: "{{ cmdb_network_ports + [item | combine({'connection': inventory_hostname_short ~ '-' ~ cmdb_network_category ~ cmdb_network_device.id ~ 'p' ~ item.id})] }}"
+  loop: "{{ cmdb_network_device['uplinks' if cmdb_network_category == 'endata' else 'access'] }}"
+  when: item.ip_address | default('', true) | string | length > 0
