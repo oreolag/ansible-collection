@@ -52,20 +52,6 @@
       - cmdb_network_ports | map(attribute='connection') | unique | list | length == cmdb_network_ports | length
       - cmdb_network_ports | map(attribute='mac') | map('lower') | unique | list | length == cmdb_network_ports | length
 
-- name: Check NetworkManager is running
-  ansible.builtin.command:
-    argv: [nmcli, --terse, --fields, RUNNING, general]
-  environment:
-    LC_ALL: C
-  register: cmdb_network_manager
-  changed_when: false
-  check_mode: false
-  failed_when: cmdb_network_manager.rc != 0 or cmdb_network_manager.stdout | trim != 'running'
+- name: Configure networking with the selected backend
+  ansible.builtin.include_tasks: backend.yml
   when: cmdb_network_ports | length > 0
-
-- name: Configure selected ports
-  ansible.builtin.include_tasks: configure.yml
-  loop: "{{ cmdb_network_ports }}"
-  loop_control:
-    loop_var: cmdb_network_port
-    label: "{{ cmdb_network_port.connection }}"

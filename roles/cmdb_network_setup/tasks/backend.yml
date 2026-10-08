@@ -1,0 +1,20 @@
+---
+- name: Validate backend selection
+  ansible.builtin.assert:
+    that:
+      - cmdb_network_setup_backend in ['auto', 'networkmanager', 'netplan']
+
+- name: Read network service states
+  ansible.builtin.service_facts:
+
+- name: Select network backend
+  ansible.builtin.set_fact:
+    cmdb_network_backend: "{{ cmdb_network_setup_backend if cmdb_network_setup_backend != 'auto' else ('networkmanager' if ansible_facts.services.get('NetworkManager.service', {}).get('state') == 'running' else 'netplan') }}"
+
+- name: Configure NetworkManager connections
+  ansible.builtin.include_tasks: networkmanager.yml
+  when: cmdb_network_backend == 'networkmanager'
+
+- name: Configure Netplan with systemd-networkd
+  ansible.builtin.include_tasks: netplan.yml
+  when: cmdb_network_backend == 'netplan'

@@ -1,0 +1,16 @@
+# Managed by cmdb_network_setup. Other Netplan files are left unchanged.
+network:
+  version: 2
+  ethernets:
+{% for port in cmdb_network_ports %}
+    {{ port.connection | to_json }}:
+      renderer: networkd
+      match:
+        macaddress: {{ port.mac | lower | to_json }}
+      dhcp4: false
+      dhcp6: false
+      accept-ra: false
+      link-local: []
+      addresses:
+        - {{ (port.ip_address ~ '/' ~ port.ip_mask) | to_json }}
+{% endfor %}

@@ -1,0 +1,80 @@
+---
+- name: Require active systemd-networkd
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.services.get('systemd-networkd.service', {}).get('state') == 'running'
+    fail_msg: "Netplan backend requires active systemd-networkd; no network manager will be installed or switched."
+
+- name: Check Netplan is available
+  ansible.builtin.command:
+    argv: [netplan, --help]
+  changed_when: false
+  check_mode: false
+
+- name: Preview CMDB Netplan configuration
+  ansible.builtin.template:
+    src: cmdb-network.yaml.j2
+    dest: /etc/netplan/90-oreol-cmdb.yaml
+    owner: root
+    group: root
+    mode: "0600"
+  when: ansible_check_mode
+
+- name: Validate and install CMDB Netplan configuration
+  when: not ansible_check_mode
+  block:
+    - name: Create temporary validation directory
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: oreol-netplan-
+      register: cmdb_netplan_stage
+      changed_when: false
+
+    - name: Stage existing Netplan configuration
+      ansible.builtin.shell:
+        cmd: |
+          set -eu
+          for directory in etc run lib; do
+            mkdir -p "$STAGE/$directory/netplan"
+            if [ -d "/$directory/netplan" ]; then
+              cp -a "/$directory/netplan/." "$STAGE/$directory/netplan/"
+            fi
+          done
+      environment:
+        STAGE: "{{ cmdb_netplan_stage.path }}"
+      changed_when: false
+
+    - name: Render proposed Netplan configuration
+      ansible.builtin.template:
+        src: cmdb-network.yaml.j2
+        dest: "{{ cmdb_netplan_stage.path }}/etc/netplan/90-oreol-cmdb.yaml"
+        mode: "0600"
+      changed_when: false
+
+    - name: Validate combined Netplan configuration without applying it
+      ansible.builtin.command:
+        argv: [netplan, generate, --root-dir, "{{ cmdb_netplan_stage.path }}"]
+      changed_when: false
+
+    - name: Install validated Netplan configuration
+      ansible.builtin.copy:
+        src: "{{ cmdb_netplan_stage.path }}/etc/netplan/90-oreol-cmdb.yaml"
+        dest: /etc/netplan/90-oreol-cmdb.yaml
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0600"
+      register: cmdb_netplan_config
+
+    - name: Apply changed Netplan configuration
+      ansible.builtin.command:
+        argv: [netplan, apply]
+      when: cmdb_netplan_config.changed
+      changed_when: true
+  always:
+    - name: Remove temporary validation directory
+      ansible.builtin.file:
+        path: "{{ cmdb_netplan_stage.path }}"
+        state: absent
+      when: cmdb_netplan_stage is defined and cmdb_netplan_stage.path is defined
+      changed_when: false

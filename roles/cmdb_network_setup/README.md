@@ -1,8 +1,7 @@
 # cmdb_network_setup
 
-Configures persistent NetworkManager Ethernet connections from the host CMDB already
-deployed on the target server. Requires NetworkManager and `nmcli` already
-installed and running on the target. It does not switch network managers.
+Configures persistent Ethernet connections from the host CMDB already
+deployed on the target server. Supports NetworkManager and Netplan with systemd-networkd. It does not install or switch network managers.
 
 ```bash
 ./ansible-play.sh cmdb_network_setup <inventory_group> --check --diff
@@ -61,3 +60,21 @@ Gateway, DNS, routing and switch configuration are outside this role's scope.
 The role reads the deployed YAML directly; no CLI installation or Python CMDB
 helper is needed. It does not copy or update the CMDB itself. This role uses `community.general.nmcli`,
 which is declared as a collection dependency.
+
+## Network backend
+
+`cmdb_network_setup_backend` defaults to `auto`: active NetworkManager takes
+precedence; otherwise active systemd-networkd and the Netplan command are required.
+Set it explicitly to `networkmanager` or `netplan` to choose the backend.
+
+The NetworkManager path retains its existing MAC-matched profiles and conditional
+activation. Netplan manages `/etc/netplan/90-oreol-cmdb.yaml`, containing only the
+selected CMDB ports. Existing files such as `10-lxc.yaml` remain unchanged. Keep
+management interfaces out of the selected CMDB ports to leave their configuration
+alone, and avoid configuring the same NIC in another Netplan file.
+
+Before installation, Netplan validates the proposed file together with copies of
+existing configuration in a temporary root. Changed configuration triggers
+`netplan apply`, which reapplies the combined host configuration and may briefly
+affect connectivity. Check mode previews the file without generation or apply.
+The role does not rename interfaces or set a default gateway.
