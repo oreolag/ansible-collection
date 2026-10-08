@@ -78,3 +78,9 @@ existing configuration in a temporary root. Changed configuration triggers
 `netplan apply`, which reapplies the combined host configuration and may briefly
 affect connectivity. Check mode previews the file without generation or apply.
 The role does not rename interfaces or set a default gateway.
+
+Netplan matches veth interfaces by their CMDB name after verifying the live MAC
+and name agree. Physical NICs retain permanent-MAC matching. This distinction
+is required because Netplan permanent-MAC matching does not support veth MACs.
+After applying, the role verifies each selected interface is up with its intended
+IPv4 address and prefix. NetworkManager behavior is unchanged.

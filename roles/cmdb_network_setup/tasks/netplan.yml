@@ -11,6 +11,25 @@
   changed_when: false
   check_mode: false
 
+- name: Read interface types and current MAC addresses
+  ansible.builtin.command:
+    argv: [ip, -details, -json, link, show]
+  register: cmdb_netplan_links
+  changed_when: false
+  check_mode: false
+
+- name: Record virtual Ethernet interface MAC addresses
+  ansible.builtin.set_fact:
+    cmdb_netplan_veth_macs: "{{ cmdb_netplan_links.stdout | from_json | selectattr('linkinfo', 'defined') | selectattr('linkinfo.info_kind', 'defined') | selectattr('linkinfo.info_kind', 'equalto', 'veth') | map(attribute='address') | map('lower') | list }}"
+
+- name: Validate virtual interface name matches CMDB MAC
+  ansible.builtin.assert:
+    that:
+      - cmdb_netplan_links.stdout | from_json | selectattr('ifname', 'equalto', item.name) | selectattr('address', 'equalto', item.mac | lower) | list | length == 1
+    fail_msg: "CMDB interface name and MAC do not match a live veth: {{ item.name }}"
+  loop: "{{ cmdb_network_ports }}"
+  when: item.mac | lower in cmdb_netplan_veth_macs
+
 - name: Preview CMDB Netplan configuration
   ansible.builtin.template:
     src: cmdb-network.yaml.j2
@@ -78,3 +97,25 @@
         state: absent
       when: cmdb_netplan_stage is defined and cmdb_netplan_stage.path is defined
       changed_when: false
+
+- name: Verify configured interfaces are up with their CMDB addresses
+  ansible.builtin.command:
+    argv: [ip, -json, address, show]
+  register: cmdb_netplan_addresses
+  changed_when: false
+  until: >-
+    (cmdb_netplan_addresses.stdout | from_json
+     | selectattr('address', 'defined')
+     | selectattr('address', 'equalto', item.mac | lower)
+     | selectattr('flags', 'contains', 'UP')
+     | map(attribute='addr_info') | flatten
+     | selectattr('family', 'equalto', 'inet')
+     | selectattr('local', 'equalto', item.ip_address)
+     | selectattr('prefixlen', 'equalto', item.ip_mask | int)
+     | list | length) > 0
+  retries: 5
+  delay: 2
+  loop: "{{ cmdb_network_ports }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: not ansible_check_mode

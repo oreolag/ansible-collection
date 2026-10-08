@@ -6,7 +6,11 @@ network:
     {{ port.connection | to_json }}:
       renderer: networkd
       match:
+{% if port.mac | lower in cmdb_netplan_veth_macs %}
+        name: {{ port.name | to_json }}
+{% else %}
         macaddress: {{ port.mac | lower | to_json }}
+{% endif %}
       dhcp4: false
       dhcp6: false
       accept-ra: false
