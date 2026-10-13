@@ -24,3 +24,11 @@
   ansible.builtin.copy:
     src: "{{ inventory_dir }}/cmdb/{{ inventory_hostname_short }}.yml"
     dest: "{{ cmdb.remote_path }}/{{ inventory_hostname_short }}.yml"
+
+- name: Copy booking inventory
+  ansible.builtin.copy:
+    src: "{{ inventory_dir }}/cmdb/booking.yml"
+    dest: "{{ cmdb.remote_path }}/booking.yml"
+    owner: root
+    group: root
+    mode: "0644"
