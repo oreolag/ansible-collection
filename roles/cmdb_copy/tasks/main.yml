@@ -32,3 +32,8 @@
     owner: root
     group: root
     mode: "0644"
+
+- name: Remove duplicate booking inventory from CMDB folder
+  ansible.builtin.file:
+    path: "{{ cmdb.remote_path }}/cmdb/booking.yml"
+    state: absent
