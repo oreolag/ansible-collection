@@ -7,7 +7,7 @@
       - odev_ssh_access_users is not mapping
       - odev_ssh_access_users | length > 0
       - odev_ssh_access_users | unique | length == odev_ssh_access_users | length
-    fail_msg: Set odev_ssh_access_users to a list of accounts to enroll.
+    fail_msg: Configure at least one present account in users.odev_users.
 
 - name: Validate SSH access account names
   ansible.builtin.assert:

@@ -1,2 +1,5 @@
 ---
-odev_ssh_access_users: []
+odev_ssh_access_users: >-
+  {{ users.odev_users | default([])
+     | selectattr('state', 'defined') | selectattr('state', 'equalto', 'present')
+     | map(attribute='name') | list }}

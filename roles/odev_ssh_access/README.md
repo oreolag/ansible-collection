@@ -6,11 +6,11 @@ trusted Ansible connection and privilege escalation.
 
 ```bash
 ansible-playbook -i hosts oreol.mgmt.odev_ssh_access \
-  -e '{"oreol_target":"odev","odev_ssh_access_users":["javier"]}'
+  -e oreol_target=odev
 ```
 
 Replace `odev` with the inventory group for the complete SSH mesh. Each selected
-account must exist and belong to `odev-users` on each selected host. The role
+account comes from `users.odev_users` with `state: present` and must exist and belong to `odev-users` on each selected host. The role
 expects the default OpenSSH Ed25519 host key and default known-hosts and
 authorized-keys paths. Use resolvable hostnames or addresses from the inventory.
 
