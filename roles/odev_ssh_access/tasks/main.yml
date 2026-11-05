@@ -1,0 +1,78 @@
+---
+- name: Validate SSH access accounts
+  ansible.builtin.assert:
+    that:
+      - odev_ssh_access_users is sequence
+      - odev_ssh_access_users is not string
+      - odev_ssh_access_users is not mapping
+      - odev_ssh_access_users | length > 0
+      - odev_ssh_access_users | unique | length == odev_ssh_access_users | length
+    fail_msg: Set odev_ssh_access_users to a list of accounts to enroll.
+
+- name: Validate SSH access account names
+  ansible.builtin.assert:
+    that:
+      - item is string
+      - item is match('^[a-z_][a-z0-9_-]*[$]?$')
+      - item != 'root'
+  loop: "{{ odev_ssh_access_users }}"
+
+- name: Check account membership on each server
+  ansible.builtin.command:
+    argv: [id, -nG, --, "{{ item }}"]
+  register: odev_ssh_access_groups
+  changed_when: false
+  failed_when: odev_ssh_access_groups.rc != 0 or 'odev-users' not in odev_ssh_access_groups.stdout.split()
+  check_mode: false
+  loop: "{{ odev_ssh_access_users }}"
+
+- name: Record SSH host aliases
+  ansible.builtin.set_fact:
+    odev_ssh_access_aliases: "{{ [inventory_hostname, ansible_host | default(inventory_hostname), ansible_facts.hostname] | unique | list }}"
+
+- name: Validate SSH host aliases
+  ansible.builtin.assert:
+    that:
+      - item is match('^[A-Za-z0-9][A-Za-z0-9_.:-]*$')
+  loop: "{{ odev_ssh_access_aliases }}"
+
+- name: Check aliases identify only one server
+  ansible.builtin.assert:
+    that:
+      - aliases | unique | length == aliases | length
+    fail_msg: SSH host aliases overlap between selected servers.
+  vars:
+    aliases: "{{ ansible_play_hosts_all | map('extract', hostvars, 'odev_ssh_access_aliases') | flatten }}"
+  run_once: true
+
+- name: Read verified SSH host key
+  ansible.builtin.slurp:
+    src: /etc/ssh/ssh_host_ed25519_key.pub
+  register: odev_ssh_access_host_key
+
+- name: Generate and read each account's cluster key
+  ansible.builtin.include_tasks: key.yml
+  loop: "{{ odev_ssh_access_users }}"
+  loop_control:
+    loop_var: odev_ssh_access_user
+  when: not ansible_check_mode
+
+- name: Install verified cluster host keys
+  ansible.builtin.blockinfile:
+    path: /etc/ssh/ssh_known_hosts
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+    marker: "# {mark} ODEV SSH ACCESS"
+    block: |
+      {% for peer in ansible_play_hosts_all | difference([inventory_hostname]) | sort %}
+      {{ hostvars[peer].odev_ssh_access_aliases | join(',') }} {{ hostvars[peer].odev_ssh_access_host_key.content | b64decode | trim }}
+      {% endfor %}
+
+- name: Configure each account's access to peers
+  ansible.builtin.include_tasks: access.yml
+  loop: "{{ odev_ssh_access_users }}"
+  loop_control:
+    loop_var: odev_ssh_access_user
+  when: not ansible_check_mode

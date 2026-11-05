@@ -1,0 +1,9 @@
+---
+- name: Configure SSH access between odev servers
+  hosts: "{{ oreol_target }}"
+  become: true
+  strategy: linear
+  any_errors_fatal: true
+
+  roles:
+    - oreol.mgmt.odev_ssh_access

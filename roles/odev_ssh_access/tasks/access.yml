@@ -1,0 +1,30 @@
+---
+- name: Configure account SSH files
+  become_user: "{{ odev_ssh_access_user }}"
+  vars:
+    peers: "{{ ansible_play_hosts_all | difference([inventory_hostname]) | sort }}"
+  block:
+    - name: Authorize peer keys for this account
+      ansible.builtin.blockinfile:
+        path: ~/.ssh/authorized_keys
+        create: true
+        mode: "0600"
+        marker: "# {mark} ODEV SSH ACCESS"
+        block: |
+          {% for peer in peers %}
+          no-agent-forwarding,no-port-forwarding,no-X11-forwarding {{ hostvars[peer].odev_ssh_access_public_keys[odev_ssh_access_user] }}
+          {% endfor %}
+
+    - name: Select the cluster identity for peer hosts
+      ansible.builtin.blockinfile:
+        path: ~/.ssh/config
+        create: true
+        mode: "0600"
+        insertbefore: BOF
+        marker: "# {mark} ODEV SSH ACCESS"
+        block: |
+          {% if peers %}
+          Host {{ peers | map('extract', hostvars, 'odev_ssh_access_aliases') | flatten | join(' ') }}
+              IdentityFile ~/.ssh/odev_cluster_ed25519
+          Host *
+          {% endif %}

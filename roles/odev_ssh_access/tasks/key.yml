@@ -1,0 +1,28 @@
+---
+- name: Prepare account SSH directory and key
+  become_user: "{{ odev_ssh_access_user }}"
+  block:
+    - name: Create account SSH directory
+      ansible.builtin.file:
+        path: ~/.ssh
+        state: directory
+        mode: "0700"
+
+    - name: Generate account cluster key
+      ansible.builtin.command:
+        argv: [ssh-keygen, -q, -t, ed25519, -N, "", -f, .ssh/odev_cluster_ed25519]
+        chdir: "~"
+        creates: .ssh/odev_cluster_ed25519
+
+    - name: Read cluster public key
+      ansible.builtin.command:
+        argv: [ssh-keygen, -y, -P, "", -f, .ssh/odev_cluster_ed25519]
+        chdir: "~"
+      register: odev_ssh_access_key
+      changed_when: false
+
+- name: Record public key for this account
+  ansible.builtin.set_fact:
+    odev_ssh_access_public_keys: >-
+      {{ odev_ssh_access_public_keys | default({}) |
+         combine({odev_ssh_access_user: odev_ssh_access_key.stdout}) }}
