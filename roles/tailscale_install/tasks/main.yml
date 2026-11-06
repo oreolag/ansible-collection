@@ -119,11 +119,24 @@
       changed_when: false
       no_log: true
 
+    - name: Locate the OpenSSH PAM account stack
+      ansible.builtin.stat:
+        path: /etc/pam.d/sshd
+      register: tailscale_sshd_pam
+
+    - name: Check for OpenSSH booking admission
+      ansible.builtin.command:
+        argv: [grep, -Fx, "# BEGIN ODEV BOOKING ADMISSION", /etc/pam.d/sshd]
+      register: tailscale_booking_admission
+      changed_when: false
+      failed_when: tailscale_booking_admission.rc not in [0, 1]
+      when: tailscale_sshd_pam.stat.exists
+
     - name: Configure Tailscale SSH
       ansible.builtin.command:
         argv:
           - tailscale
           - set
-          - "--ssh={{ tailscale_install_ssh | bool | ternary('true', 'false') }}"
-      when: (tailscale_preferences.stdout | from_json).RunSSH != (tailscale_install_ssh | bool)
+          - "--ssh={{ (tailscale_install_ssh | bool and (tailscale_booking_admission.rc | default(1)) != 0) | ternary('true', 'false') }}"
+      when: (tailscale_preferences.stdout | from_json).RunSSH != (tailscale_install_ssh | bool and (tailscale_booking_admission.rc | default(1)) != 0)
       changed_when: true

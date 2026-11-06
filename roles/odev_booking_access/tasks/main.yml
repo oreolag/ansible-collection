@@ -1,0 +1,66 @@
+---
+- name: Read booking service assignments from the CMDB
+  ansible.builtin.set_fact:
+    odev_booking_access_assignments: >-
+      {{ (lookup('ansible.builtin.file', inventory_dir ~ '/cmdb/booking.yml') | from_yaml).servers
+         | selectattr('managed_servers', 'contains', ansible_facts.hostname) | list }}
+
+- name: Check that each machine has at most one service
+  ansible.builtin.assert:
+    that: odev_booking_access_assignments | length <= 1
+    fail_msg: "{{ ansible_facts.hostname }} is assigned to more than one booking service."
+
+- name: Resolve the managed machine's booking service
+  when: odev_booking_access_assignments | length == 1
+  block:
+    - name: Read the assigned service
+      ansible.builtin.set_fact:
+        odev_booking_access_assignment: "{{ odev_booking_access_assignments[0] }}"
+
+    - name: Validate the OpenSSH endpoint
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.hostname is match('^[a-zA-Z0-9][a-zA-Z0-9-]*$')
+          - odev_booking_access_assignment.name is match('^[a-zA-Z0-9][a-zA-Z0-9-]*$')
+          - odev_booking_access_assignment.access is defined
+          - odev_booking_access_assignment.access is mapping
+          - odev_booking_access_assignment.access.host is defined
+          - odev_booking_access_assignment.access.host is match('^[a-zA-Z0-9:][a-zA-Z0-9.:-]*$')
+          - odev_booking_access_assignment.access.port | default(22) | string is match('^[0-9]+$')
+          - odev_booking_access_assignment.access.port | default(22) | int > 0
+          - odev_booking_access_assignment.access.port | default(22) | int <= 65535
+          - odev_booking_access_cli_path | default('/opt/odev') is match('^/[a-zA-Z0-9_./-]+$')
+        fail_msg: "Set a valid OpenSSH access.host and optional access.port for {{ odev_booking_access_assignment.name }} in cmdb/booking.yml."
+
+    - name: Find the booking service in the management inventory
+      ansible.builtin.set_fact:
+        odev_booking_access_candidates: "{{ selected if selected else available }}"
+      vars:
+        pattern: "^{{ odev_booking_access_assignment.name | regex_escape }}([.]|$)"
+        selected: "{{ ansible_play_hosts_all | select('match', pattern) | list }}"
+        available: "{{ groups['all'] | select('match', pattern) | list }}"
+
+    - name: Check that the booking service has a usable inventory entry
+      ansible.builtin.assert:
+        that:
+          - odev_booking_access_candidates | length == 1 or odev_booking_access_assignment.name in odev_booking_access_candidates
+        fail_msg: "No unique management inventory host for {{ odev_booking_access_assignment.name }}. Candidates {{ odev_booking_access_candidates }}."
+
+    - name: Set the inventory host used for provisioning
+      ansible.builtin.set_fact:
+        odev_booking_access_service: >-
+          {{ odev_booking_access_assignment.name if odev_booking_access_assignment.name in odev_booking_access_candidates
+             else odev_booking_access_candidates[0] }}
+
+    - name: Verify the service hostname over the management connection
+      ansible.builtin.command:
+        argv: [hostname, -s]
+      delegate_to: "{{ hostvars[inventory_hostname].odev_booking_access_service | default(inventory_hostname) }}"
+      register: odev_booking_access_hostname
+      changed_when: false
+      check_mode: false
+      failed_when: odev_booking_access_hostname.rc != 0 or odev_booking_access_hostname.stdout != odev_booking_access_assignment.name
+
+- name: Provision the scoped credential for the managed machine
+  ansible.builtin.include_tasks: provision.yml
+  when: odev_booking_access_assignments | length == 1

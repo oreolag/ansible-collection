@@ -1,0 +1,92 @@
+---
+- name: Prepare the read-only account on the booking service
+  delegate_to: "{{ hostvars[inventory_hostname].odev_booking_access_service }}"
+  throttle: 1
+  block:
+    - name: Check that the booking access program is deployed
+      ansible.builtin.stat:
+        path: "{{ odev_booking_access_cli_path | default('/opt/odev') }}/booking/access.py"
+      register: odev_booking_access_program
+      failed_when: not odev_booking_access_program.stat.isreg | default(false)
+
+    - name: Ensure the booking socket group exists
+      ansible.builtin.group:
+        name: odev-users
+        state: present
+
+    - name: Create the booking lookup account
+      ansible.builtin.user:
+        name: odev-booking-check
+        system: true
+        groups: odev-users
+        append: true
+        home: /var/lib/odev-booking-check
+        create_home: false
+        shell: /bin/sh
+        password_lock: true
+
+    - name: Create the root-owned SSH key directory
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      loop:
+        - /var/lib/odev-booking-check
+        - /var/lib/odev-booking-check/.ssh
+
+    - name: Read the verified OpenSSH host key
+      ansible.builtin.slurp:
+        src: /etc/ssh/ssh_host_ed25519_key.pub
+      register: odev_booking_access_host_key
+
+- name: Create the managed host credential directory
+  ansible.builtin.file:
+    path: /etc/odev/booking-access
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Generate the managed host lookup key
+  ansible.builtin.command:
+    argv: [ssh-keygen, -q, -t, ed25519, -N, "", -f, /etc/odev/booking-access/id_ed25519]
+    creates: /etc/odev/booking-access/id_ed25519
+
+- name: Read the managed host public key
+  ansible.builtin.command:
+    argv: [ssh-keygen, -y, -P, "", -f, /etc/odev/booking-access/id_ed25519]
+  register: odev_booking_access_public_key
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Authorize only lookup requests for this managed host
+  ansible.builtin.blockinfile:
+    path: /var/lib/odev-booking-check/.ssh/authorized_keys
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+    marker: "# {mark} ODEV BOOKING ACCESS {{ hostvars[inventory_hostname].ansible_facts.hostname }}"
+    block: >-
+      restrict,command="/usr/bin/python3 -Es {{ odev_booking_access_cli_path | default('/opt/odev') }}/booking/access.py --serve {{ hostvars[inventory_hostname].ansible_facts.hostname }}" {{ hostvars[inventory_hostname].odev_booking_access_public_key.stdout }}
+  delegate_to: "{{ hostvars[inventory_hostname].odev_booking_access_service }}"
+  throttle: 1
+  when: not ansible_check_mode
+
+- name: Pin the booking service host key
+  ansible.builtin.copy:
+    dest: /etc/odev/booking-access/known_hosts
+    owner: root
+    group: root
+    mode: "0600"
+    content: "{{ odev_booking_access_assignment.name }} {{ odev_booking_access_host_key.content | b64decode | trim }}\n"
+
+- name: Configure the booking service endpoint
+  ansible.builtin.copy:
+    dest: /etc/odev/booking-access/endpoint.json
+    owner: root
+    group: root
+    mode: "0600"
+    content: "{{ {'service': odev_booking_access_assignment.name, 'address': odev_booking_access_assignment.access.host, 'port': odev_booking_access_assignment.access.port | default(22) | int} | to_nice_json }}\n"

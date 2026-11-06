@@ -1,0 +1,11 @@
+---
+- name: Provision and enforce booking access
+  hosts: "{{ oreol_target }}"
+  become: true
+  strategy: linear
+  any_errors_fatal: true
+
+  roles:
+    - role: oreol.mgmt.odev_booking_access
+    - role: oreol.mgmt.odev_booking_enforce
+      when: odev_booking_access_assignments | length == 1

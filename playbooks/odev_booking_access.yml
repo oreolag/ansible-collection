@@ -1,0 +1,9 @@
+---
+- name: Provision the booking access lookup
+  hosts: "{{ oreol_target }}"
+  become: true
+  strategy: linear
+  any_errors_fatal: true
+
+  roles:
+    - oreol.mgmt.odev_booking_access

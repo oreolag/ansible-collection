@@ -1,0 +1,8 @@
+---
+- name: Enforce bookings for OpenSSH logins
+  hosts: "{{ oreol_target }}"
+  become: true
+  any_errors_fatal: true
+
+  roles:
+    - oreol.mgmt.odev_booking_enforce

@@ -1,0 +1,64 @@
+---
+- name: Verify the management account can bypass booking checks
+  ansible.builtin.command:
+    argv: [id, -nG, --, "{{ ansible_user | default(lookup('ansible.builtin.env', 'USER')) }}"]
+  register: odev_booking_enforce_groups
+  changed_when: false
+  check_mode: false
+  failed_when: odev_booking_enforce_groups.rc != 0 or 'odev-admins' not in odev_booking_enforce_groups.stdout.split()
+
+- name: Verify that OpenSSH uses PAM
+  ansible.builtin.command:
+    argv: [/usr/sbin/sshd, -T]
+  register: odev_booking_enforce_sshd
+  changed_when: false
+  check_mode: false
+  failed_when: odev_booking_enforce_sshd.rc != 0 or 'usepam yes' not in odev_booking_enforce_sshd.stdout_lines
+
+- name: Validate the deployed CLI path
+  ansible.builtin.assert:
+    that: odev_booking_access_cli_path | default('/opt/odev') is match('^/[a-zA-Z0-9_./-]+$')
+
+- name: Verify the read-only booking lookup answers on this managed host
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/python3
+      - -Es
+      - "{{ odev_booking_access_cli_path | default('/opt/odev') }}/booking/access.py"
+      - --check
+      - "{{ ansible_user | default(lookup('ansible.builtin.env', 'USER')) }}"
+  register: odev_booking_enforce_lookup
+  changed_when: false
+  check_mode: false
+  failed_when: odev_booking_enforce_lookup.rc not in [0, 1]
+
+- name: Check for Tailscale
+  ansible.builtin.stat:
+    path: /usr/bin/tailscale
+  register: odev_booking_enforce_tailscale
+
+- name: Close the Tailscale SSH path that bypasses OpenSSH
+  when: odev_booking_enforce_tailscale.stat.exists
+  block:
+    - name: Read Tailscale SSH preference
+      ansible.builtin.command:
+        argv: [/usr/bin/tailscale, debug, prefs]
+      register: odev_booking_enforce_prefs
+      changed_when: false
+      check_mode: false
+      no_log: true
+
+    - name: Disable the Tailscale SSH server
+      ansible.builtin.command:
+        argv: [/usr/bin/tailscale, set, --ssh=false]
+      when:
+        - not ansible_check_mode
+        - (odev_booking_enforce_prefs.stdout | from_json).RunSSH | bool
+
+- name: Require booking admission in the OpenSSH PAM account stack
+  ansible.builtin.blockinfile:
+    path: /etc/pam.d/sshd
+    insertbefore: BOF
+    backup: true
+    marker: "# {mark} ODEV BOOKING ADMISSION"
+    block: "account required pam_exec.so quiet seteuid /usr/bin/python3 -Es {{ odev_booking_access_cli_path | default('/opt/odev') }}/booking/access.py --pam"
