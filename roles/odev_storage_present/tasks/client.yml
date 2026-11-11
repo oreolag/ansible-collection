@@ -1,0 +1,28 @@
+---
+- name: Validate and record assignments from this client
+  vars:
+    client: "{{ lookup('ansible.builtin.file', odev_storage_present_client_file) | from_yaml }}"
+    mounts: "{{ client.get('storage', {}).get('mounts', []) | selectattr('server', 'equalto', odev_storage_present_config.name) | list }}"
+  when: mounts | length > 0
+  block:
+    - name: Require an explicit mount state
+      ansible.builtin.assert:
+        that:
+          - item.state is defined
+          - item.state in ['present', 'absent']
+        fail_msg: "Each storage mount in {{ odev_storage_present_client_file }} requires state: present or absent."
+      loop: "{{ mounts }}"
+
+    - name: Validate client share references and management addresses
+      ansible.builtin.assert:
+        that:
+          - item.share in odev_storage_present_config.shares
+          - odev_storage_present_config.shares[item.share].state == 'present'
+          - client.devices.enmgmt[0].access[0].ip_address is match('^[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+$')
+        fail_msg: "Present mount references an absent/unknown share or invalid management IPv4 in {{ odev_storage_present_client_file }}."
+      loop: "{{ mounts | selectattr('state', 'equalto', 'present') | list }}"
+
+    - name: Record authorized client IPs
+      ansible.builtin.set_fact:
+        odev_storage_present_clients: "{{ odev_storage_present_clients + [{'share': item.share, 'ip': client.devices.enmgmt[0].access[0].ip_address}] }}"
+      loop: "{{ mounts | selectattr('state', 'equalto', 'present') | list }}"

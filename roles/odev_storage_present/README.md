@@ -1,4 +1,4 @@
-# odev_storage_install
+# odev_storage_present
 
 Configure a declared Linux storage server using its share types in the CMDB.
 Version one supports only `type: nfs` and rejects other types before making
@@ -9,7 +9,7 @@ names). This role is independent of Incus. The collection reads configuration fr
 Run from your management repository after updating its installed collection:
 
 ```bash
-./ansible-play.sh odev_storage odev-storage-01
+./ansible-play.sh odev_storage_install odev-storage-01
 ```
 
 The playbook checks every selected inventory name against `cmdb/storage.yml`
@@ -81,18 +81,36 @@ volume are configured. Until a data volume is attached, the export uses the
 server's existing root filesystem and deleting the VM deletes that data.
 The role does not delete exported data when configuration changes.
 
-## Playbook structure
+## Playbook structure and share lifecycle
 
-`odev_storage` is the public wrapper playbook. It currently imports
-`odev_storage_install`, which applies this role. Server installation can also
-be run independently:
+`odev_storage_install` is the public wrapper playbook and currently applies the
+`oreol.mgmt.odev_storage_present` server role. The old `odev_storage` wrapper and
+`odev_storage_install` role have been replaced by these names. Client mounting
+(`odev_storage_mount`) remains to be implemented and is not called yet.
 
-```bash
-./ansible-play.sh odev_storage_install odev-storage-01
+Every share requires explicit `state: present` or `state: absent`:
+
+```yaml
+servers:
+  - name: storage-01
+    ip: 192.0.2.10
+    shares:
+      scratch:
+        type: nfs
+        export: /exports/scratch
+        state: present
 ```
 
-The planned client role/playbook is `odev_storage_mount`. It is not implemented
-or called yet. When added, the wrapper will orchestrate separate server and
-client plays in that order, selecting hosts from their CMDB declarations.
-The existing rejection of client targets during installation is preserved;
-passing `odev-01` does not configure it as a server or mount storage.
+Present shares are configured and exported to clients with present assignments.
+Absent shares are omitted from the managed export file on reconciliation; their
+directories and contents are never removed. The NFS service remains installed
+and running. All shares must retain a valid type and export path even when absent.
+A present client assignment referencing an absent share fails before installation
+or export changes. Absent client assignments are not granted export access.
+
+Until the client role is implemented, unmount clients explicitly before marking
+both the share and its client assignments absent and running this playbook.
+This server role does not unmount clients. The future wrapper must unmount absent
+client assignments before withdrawing exports, then mount present assignments
+after configuring servers. Omitting a server does not remove its existing setup;
+targeting an omitted server fails the authorization guard.
