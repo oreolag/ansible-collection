@@ -1,0 +1,104 @@
+---
+- name: Validate share definitions
+  ansible.builtin.assert:
+    that:
+      - item.value.type == 'nfs'
+      - item.value.export is match('^/[a-zA-Z0-9_/-]+$')
+      - item.value.export != '/'
+      - "'..' not in item.value.export.split('/')"
+    fail_msg: "Invalid NFS share {{ item.key }}: use an absolute export directory."
+  loop: "{{ odev_storage_install_config.shares | dict2items }}"
+
+- name: Require distinct export paths
+  ansible.builtin.assert:
+    that:
+      - exports | unique | length == exports | length
+  vars:
+    exports: "{{ odev_storage_install_config.shares.values() | map(attribute='export') | list }}"
+
+- name: Verify the actual machine hostname
+  ansible.builtin.command:
+    argv: [hostname, -s]
+  register: odev_storage_install_hostname
+  changed_when: false
+  check_mode: false
+
+- name: Reject an inventory entry pointing at another machine
+  ansible.builtin.assert:
+    that:
+      - odev_storage_install_hostname.stdout == odev_storage_install_config.name
+    fail_msg: "Connected to {{ odev_storage_install_hostname.stdout }}, expected {{ odev_storage_install_config.name }}."
+
+- name: Read actual IPv4 addresses
+  ansible.builtin.command:
+    argv: [ip, -j, -4, address, show]
+  register: odev_storage_install_addresses
+  changed_when: false
+  check_mode: false
+
+- name: Verify the declared storage IP belongs to this machine
+  ansible.builtin.assert:
+    that:
+      - odev_storage_install_config.ip in (odev_storage_install_addresses.stdout | from_json | map(attribute='addr_info') | flatten | map(attribute='local') | list)
+    fail_msg: "The storage IP in cmdb/storage.yml does not belong to this machine."
+
+- name: Read declared client assignments
+  ansible.builtin.include_tasks: client.yml
+  loop: "{{ query('ansible.builtin.fileglob', inventory_dir ~ '/cmdb/*.yml') | sort }}"
+  loop_control:
+    loop_var: odev_storage_install_client_file
+
+- name: Install the NFS server
+  ansible.builtin.apt:
+    name: nfs-kernel-server
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create export directories
+  ansible.builtin.file:
+    path: "{{ item.value.export }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop: "{{ odev_storage_install_config.shares | dict2items }}"
+
+- name: Create the export configuration directory
+  ansible.builtin.file:
+    path: /etc/exports.d
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Configure CMDB-managed exports
+  ansible.builtin.template:
+    src: shares.exports.j2
+    dest: /etc/exports.d/odev.exports
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Reload NFS exports
+
+- name: Enable and start the NFS server
+  ansible.builtin.systemd_service:
+    name: nfs-kernel-server
+    enabled: true
+    state: started
+  when: not ansible_check_mode
+
+- name: Apply export changes before verification
+  ansible.builtin.meta: flush_handlers
+
+- name: Read active NFS exports
+  ansible.builtin.command:
+    argv: [exportfs, -v]
+  register: odev_storage_install_exports
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Show active NFS exports
+  ansible.builtin.debug:
+    var: odev_storage_install_exports.stdout_lines
+  when: not ansible_check_mode

@@ -1,0 +1,5 @@
+---
+# Server installation comes first. Client mounting will be added after that role
+# is implemented; this wrapper currently performs server installation only.
+- name: Install declared storage services
+  ansible.builtin.import_playbook: oreol.mgmt.odev_storage_install

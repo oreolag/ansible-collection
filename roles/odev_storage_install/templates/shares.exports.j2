@@ -1,0 +1,6 @@
+# Managed by Ansible from cmdb/storage.yml and client storage.mounts.
+{% for name, share in odev_storage_install_config.shares | dictsort %}
+{% if odev_storage_install_clients | selectattr('share', 'equalto', name) | list | length > 0 %}
+{{ share.export }}{% for ip in odev_storage_install_clients | selectattr('share', 'equalto', name) | map(attribute='ip') | unique | sort %} {{ ip }}(rw,sync,no_subtree_check,root_squash){% endfor %}
+{% endif %}
+{% endfor %}

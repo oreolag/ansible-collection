@@ -1,0 +1,6 @@
+---
+- name: Reload NFS exports
+  ansible.builtin.command:
+    argv: [exportfs, -ra]
+  changed_when: true
+  when: not ansible_check_mode
