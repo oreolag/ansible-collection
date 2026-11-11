@@ -2,7 +2,10 @@
 
 Enroll existing `odev-users` accounts for non-interactive SSH between the
 selected servers. Run this from the management machine using its existing
-trusted Ansible connection and privilege escalation.
+trusted Ansible connection and privilege escalation. On Ubuntu/Debian targets,
+the role installs `acl` (providing `setfacl`) as root before becoming the selected
+accounts. This allows Ansible to grant those accounts access to its temporary
+module files without making the files world-readable.
 
 ```bash
 ansible-playbook -i hosts oreol.mgmt.odev_ssh_access \

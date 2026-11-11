@@ -50,6 +50,15 @@
     src: /etc/ssh/ssh_host_ed25519_key.pub
   register: odev_ssh_access_host_key
 
+- name: Install ACL support for switching between SSH accounts
+  become: true
+  become_user: root
+  ansible.builtin.apt:
+    name: acl
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
 - name: Generate and read each account's cluster key
   ansible.builtin.include_tasks: key.yml
   loop: "{{ odev_ssh_access_users }}"
