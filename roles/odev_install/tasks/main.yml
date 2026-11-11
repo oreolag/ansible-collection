@@ -22,10 +22,23 @@
           Cache-Control: no-cache
         force: true
         mode: "0600"
+      register: odev_install_download
+      until: odev_install_download is succeeded
+      retries: 3
+      delay: 5
 
     - name: Execute Oreol CLI installer
-      ansible.builtin.command:
-        argv: [bash, "{{ odev_install_file.path }}"]
+      ansible.builtin.shell:
+        cmd: |
+          umask 077
+          rm -f /var/log/odev-install.exit
+          bash {{ odev_install_file.path | quote }} > /var/log/odev-install.log 2>&1
+          rc=$?
+          printf '%s\n' "$rc" > /var/log/odev-install.exit
+          exit "$rc"
+        executable: /bin/bash
+      async: "{{ odev_install_timeout }}"
+      poll: 15
       environment:
         TERM: xterm
         DEBIAN_FRONTEND: noninteractive
