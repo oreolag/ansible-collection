@@ -1,0 +1,9 @@
+---
+- name: Apply declared storage mounts on client machines
+  hosts: "{{ oreol_target }}"
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+  strategy: linear
+  roles:
+    - oreol.mgmt.odev_storage_mount

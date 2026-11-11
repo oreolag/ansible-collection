@@ -9,7 +9,7 @@ names). This role is independent of Incus. The collection reads configuration fr
 Run from your management repository after updating its installed collection:
 
 ```bash
-./ansible-play.sh odev_storage_install odev-storage-01
+./ansible-play.sh odev_storage_present odev-storage-01
 ```
 
 The playbook checks every selected inventory name against `cmdb/storage.yml`
@@ -23,7 +23,7 @@ machines referencing the server and share with `state: present` are authorized.
 Every assignment requires `state: present` or `state: absent`. Absent assignments
 are excluded from exports; shares with no present clients are not exported.
 Applying this server role reconciles export authorization; client unmounting
-will be handled by the forthcoming `odev_storage_mount` role. Shared data is
+is handled by the separate `odev_storage_mount` role. Shared data is
 never deleted by changing an assignment state. Version one uses the
 first management interface's first access IPv4 (`devices.enmgmt[0].access[0]`).
 These addresses must be the actual source addresses clients use to reach NFS.
@@ -83,10 +83,15 @@ The role does not delete exported data when configuration changes.
 
 ## Playbook structure and share lifecycle
 
-`odev_storage_install` is the public wrapper playbook and currently applies the
-`oreol.mgmt.odev_storage_present` server role. The old `odev_storage` wrapper and
-`odev_storage_install` role have been replaced by these names. Client mounting
-(`odev_storage_mount`) remains to be implemented and is not called yet.
+Use two explicit playbooks, each calling its matching role:
+
+```bash
+./ansible-play.sh odev_storage_present odev-storage-01
+./ansible-play.sh odev_storage_mount 'odev-development-01:odev-development-02'
+```
+
+There is no storage installation wrapper. Configure server exports before
+mounting clients; unmount clients before withdrawing exports.
 
 Every share requires explicit `state: present` or `state: absent`:
 
@@ -108,9 +113,8 @@ and running. All shares must retain a valid type and export path even when absen
 A present client assignment referencing an absent share fails before installation
 or export changes. Absent client assignments are not granted export access.
 
-Until the client role is implemented, unmount clients explicitly before marking
-both the share and its client assignments absent and running this playbook.
-This server role does not unmount clients. The future wrapper must unmount absent
-client assignments before withdrawing exports, then mount present assignments
-after configuring servers. Omitting a server does not remove its existing setup;
+For retirement, mark the client assignments absent and run `odev_storage_mount`
+on all affected clients before withdrawing the server export with this playbook.
+This server role does not unmount clients. For installation, configure servers
+first, then run `odev_storage_mount` on the selected clients. Omitting a server does not remove its existing setup;
 targeting an omitted server fails the authorization guard.

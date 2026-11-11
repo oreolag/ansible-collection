@@ -1,0 +1,78 @@
+---
+- name: Validate all assignment fields
+  ansible.builtin.assert:
+    that:
+      - item is mapping
+      - item.server is string
+      - item.share is string
+      - item.state in ['present', 'absent']
+      - item.mount_path is string
+      - item.mount_path is match('^/[a-zA-Z0-9_-]+(/[a-zA-Z0-9_-]+)*$')
+    fail_msg: "Each storage assignment requires server, share, state: present/absent and a normalized absolute mount_path other than /."
+  loop: "{{ odev_storage_mount_assignments }}"
+
+- name: Require unique mount paths
+  ansible.builtin.assert:
+    that:
+      - paths | unique | length == paths | length
+    fail_msg: "Duplicate mount paths in {{ inventory_hostname_short }}.yml."
+  vars:
+    paths: "{{ odev_storage_mount_assignments | map(attribute='mount_path') | list }}"
+
+- name: Read the shared storage catalogue
+  ansible.builtin.set_fact:
+    odev_storage_mount_servers: "{{ (lookup('ansible.builtin.file', inventory_dir ~ '/cmdb/storage.yml') | from_yaml).servers }}"
+
+- name: Resolve and validate every assignment before making changes
+  ansible.builtin.include_tasks: resolve.yml
+  loop: "{{ odev_storage_mount_assignments }}"
+  loop_control:
+    loop_var: odev_storage_mount_assignment
+
+- name: Gather client identity and virtualization facts
+  ansible.builtin.setup:
+    gather_subset: ['!all', min, virtual]
+
+- name: Require the intended Linux VM or physical machine
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.system == 'Linux'
+      - ansible_facts.os_family == 'Debian'
+      - ansible_facts.hostname == inventory_hostname_short
+      - ansible_facts.virtualization_type | default('') not in ['lxc', 'docker', 'podman', 'container', 'openvz', 'systemd-nspawn']
+    fail_msg: "Direct NFS mounting requires the intended Ubuntu/Debian VM or physical server, not an unprivileged container."
+
+- name: Inspect existing mounts before changing any assignment
+  ansible.builtin.include_tasks: inspect.yml
+  loop: "{{ odev_storage_mount_resolved }}"
+  loop_control:
+    loop_var: odev_storage_mount_entry
+
+- name: Install the NFS client when present mounts are requested
+  ansible.builtin.apt:
+    name: nfs-common
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  when: odev_storage_mount_resolved | selectattr('state', 'equalto', 'present') | list | length > 0
+
+- name: Unmount absent assignments without deleting their directories
+  ansible.posix.mount:
+    path: "{{ item.path }}"
+    state: unmounted
+  loop: "{{ odev_storage_mount_resolved | selectattr('state', 'equalto', 'absent') | list }}"
+
+- name: Remove absent assignments from fstab without deleting directories
+  ansible.posix.mount:
+    path: "{{ item.path }}"
+    state: absent_from_fstab
+  loop: "{{ odev_storage_mount_resolved | selectattr('state', 'equalto', 'absent') | list }}"
+
+- name: Mount present NFS shares and persist them in fstab
+  ansible.posix.mount:
+    path: "{{ item.path }}"
+    src: "{{ item.source }}"
+    fstype: nfs
+    opts: rw,hard,_netdev,vers=4
+    state: mounted
+  loop: "{{ odev_storage_mount_resolved | selectattr('state', 'equalto', 'present') | list }}"

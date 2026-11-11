@@ -1,0 +1,24 @@
+---
+- name: Find the target machine CMDB file
+  ansible.builtin.set_fact:
+    odev_storage_mount_files: "{{ query('ansible.builtin.fileglob', inventory_dir ~ '/cmdb/' ~ inventory_hostname_short ~ '.yml') }}"
+
+- name: Read the target machine CMDB
+  ansible.builtin.set_fact:
+    odev_storage_mount_machine: "{{ (lookup('ansible.builtin.file', odev_storage_mount_files[0]) | from_yaml) if odev_storage_mount_files else {} }}"
+
+- name: Read storage assignments
+  ansible.builtin.set_fact:
+    odev_storage_mount_assignments: "{{ odev_storage_mount_machine.get('storage', {}).get('mounts', []) }}"
+    odev_storage_mount_resolved: []
+
+- name: Validate the assignment list
+  ansible.builtin.assert:
+    that:
+      - odev_storage_mount_assignments is sequence
+      - odev_storage_mount_assignments is not string
+      - odev_storage_mount_assignments is not mapping
+
+- name: Apply declared storage assignments
+  ansible.builtin.include_tasks: configure.yml
+  when: odev_storage_mount_assignments | length > 0

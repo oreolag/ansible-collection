@@ -1,0 +1,31 @@
+---
+- name: Inspect live and persistent entries at the exact mount path
+  ansible.builtin.command:
+    argv: "{{ ['findmnt', '--noheadings', '--raw', '--output', 'SOURCE,FSTYPE', '--mountpoint', odev_storage_mount_entry.path] + item }}"
+  loop:
+    - []
+    - [--fstab]
+  register: odev_storage_mount_existing
+  changed_when: false
+  check_mode: false
+  failed_when: odev_storage_mount_existing.rc not in [0, 1]
+
+- name: Refuse to replace or unmount unrelated filesystems
+  ansible.builtin.assert:
+    that:
+      - item.rc == 1 or item.stdout.splitlines() | length == 1
+      - item.rc == 1 or item.stdout.split()[0] == odev_storage_mount_entry.source
+      - item.rc == 1 or item.stdout.split()[1] in ['nfs', 'nfs4']
+    fail_msg: "Conflicting filesystem at {{ odev_storage_mount_entry.path }}; inspect it before changing the CMDB assignment."
+  loop: "{{ odev_storage_mount_existing.results }}"
+
+- name: Inspect the mount path itself
+  ansible.builtin.stat:
+    path: "{{ odev_storage_mount_entry.path }}"
+    follow: false
+  register: odev_storage_mount_path
+
+- name: Require a directory rather than a file or symlink
+  ansible.builtin.assert:
+    that:
+      - not odev_storage_mount_path.stat.exists or (odev_storage_mount_path.stat.isdir and not odev_storage_mount_path.stat.islnk)
