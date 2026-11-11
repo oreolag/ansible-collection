@@ -32,7 +32,8 @@
         cmd: |
           umask 077
           rm -f /var/log/odev-install.exit
-          bash {{ odev_install_file.path | quote }} > /var/log/odev-install.log 2>&1
+          # Keep logs private without restricting files created by the installer.
+          (umask 022; bash {{ odev_install_file.path | quote }}) > /var/log/odev-install.log 2>&1
           rc=$?
           printf '%s\n' "$rc" > /var/log/odev-install.exit
           exit "$rc"
