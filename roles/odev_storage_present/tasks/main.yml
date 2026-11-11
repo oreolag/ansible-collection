@@ -5,34 +5,12 @@
       {{ (lookup('ansible.builtin.file', inventory_dir ~ '/cmdb/storage.yml') | from_yaml).servers
          | selectattr('name', 'equalto', inventory_hostname_short) | list }}
 
-- name: Require explicit storage server authorization
+- name: Require unambiguous storage server assignments
   ansible.builtin.assert:
     that:
-      - odev_storage_present_matches | length == 1
-    fail_msg: "{{ inventory_hostname }} is not a unique declared storage server in cmdb/storage.yml."
+      - odev_storage_present_matches | length <= 1
+    fail_msg: "{{ inventory_hostname }} matches duplicate storage servers in cmdb/storage.yml."
 
-- name: Read this server's configuration
-  ansible.builtin.set_fact:
-    odev_storage_present_config: "{{ odev_storage_present_matches[0] }}"
-    odev_storage_present_clients: []
-
-- name: Validate the storage configuration
-  ansible.builtin.assert:
-    that:
-      - odev_storage_present_config.ip is string
-      - odev_storage_present_config.ip is match('^[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+$')
-      - odev_storage_present_config.shares is mapping
-      - odev_storage_present_config.shares | length > 0
-
-- name: Validate share states and supported types before making changes
-  ansible.builtin.assert:
-    that:
-      - item.value.state is defined
-      - item.value.state in ['present', 'absent']
-      - item.value.type | default('') in ['nfs']
-    fail_msg: "Share {{ item.key }} requires state: present/absent and type: nfs."
-  loop: "{{ odev_storage_present_config.shares | dict2items }}"
-
-- name: Configure NFS shares
-  ansible.builtin.include_tasks: nfs.yml
-  when: odev_storage_present_config.shares | dict2items | selectattr('value.type', 'equalto', 'nfs') | list | length > 0
+- name: Configure this machine only when declared as a storage server
+  ansible.builtin.include_tasks: configure.yml
+  when: odev_storage_present_matches | length == 1

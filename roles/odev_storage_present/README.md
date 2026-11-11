@@ -12,11 +12,24 @@ Run from your management repository after updating its installed collection:
 ./ansible-play.sh odev_storage_present odev-storage-01
 ```
 
-The playbook checks every selected inventory name against `cmdb/storage.yml`
-before running the role. Undeclared or duplicate server names fail before
-installation. The role repeats the authorization check and verifies the actual
-hostname and storage IPv4 before making changes. The role also validates shares
-and client assignments before installation.
+The playbook accepts mixed inventory groups. Machines not listed as storage
+servers in `cmdb/storage.yml` are skipped without gathering facts, connecting to
+them or changing packages/services. An empty `servers: []` skips all targets.
+Duplicate matching declarations fail before any server changes. Declared servers
+still undergo configuration, actual hostname and storage-IP validation before
+changes. Unsupported types, invalid states and contradictory client assignments
+fail rather than being skipped. The same selection behavior applies when the
+role is invoked directly.
+
+```bash
+./ansible-play.sh odev_storage_present incus_instances
+./ansible-play.sh odev_storage_mount incus_instances
+```
+
+Both storage playbooks can use ordinary SSH over Tailscale addresses. They do
+not disable Tailscale SSH. The OpenSSH-only management route used for booking
+enforcement is not required by storage. Connectivity and sudo access are still
+required on machines with applicable declarations.
 
 Client access is derived from each `cmdb/*.yml` file's `storage.mounts`. Only
 machines referencing the server and share with `state: present` are authorized.
@@ -117,4 +130,4 @@ For retirement, mark the client assignments absent and run `odev_storage_mount`
 on all affected clients before withdrawing the server export with this playbook.
 This server role does not unmount clients. For installation, configure servers
 first, then run `odev_storage_mount` on the selected clients. Omitting a server does not remove its existing setup;
-targeting an omitted server fails the authorization guard.
+targeting an omitted server skips it without changing its existing setup.

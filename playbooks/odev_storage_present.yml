@@ -6,11 +6,11 @@
   any_errors_fatal: true
 
   pre_tasks:
-    - name: Validate every target against the storage catalogue before making changes
+    - name: Reject ambiguous storage server assignments before making changes
       ansible.builtin.assert:
         that:
-          - matches | length == 1
-        fail_msg: "{{ item }} must identify exactly one server in cmdb/storage.yml. No storage changes were made."
+          - matches | length <= 1
+        fail_msg: "{{ item }} matches duplicate servers in cmdb/storage.yml. No storage changes were made."
       vars:
         catalogue: "{{ (lookup('ansible.builtin.file', inventory_dir ~ '/cmdb/storage.yml') | from_yaml).servers }}"
         matches: "{{ catalogue | selectattr('name', 'equalto', item.split('.')[0]) | list }}"
