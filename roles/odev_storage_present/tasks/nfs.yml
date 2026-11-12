@@ -1,21 +1,4 @@
 ---
-- name: Validate share definitions
-  ansible.builtin.assert:
-    that:
-      - item.value.type == 'nfs'
-      - item.value.export is match('^/[a-zA-Z0-9_/-]+$')
-      - item.value.export != '/'
-      - "'..' not in item.value.export.split('/')"
-    fail_msg: "Invalid NFS share {{ item.key }}: use an absolute export directory."
-  loop: "{{ odev_storage_present_config.shares | dict2items }}"
-
-- name: Require distinct export paths
-  ansible.builtin.assert:
-    that:
-      - exports | unique | length == exports | length
-  vars:
-    exports: "{{ odev_storage_present_config.shares.values() | map(attribute='export') | list }}"
-
 - name: Verify the actual machine hostname
   ansible.builtin.command:
     argv: [hostname, -s]
@@ -48,6 +31,12 @@
   loop_control:
     loop_var: odev_storage_present_client_file
 
+- name: Verify login account identities across storage clients
+  ansible.builtin.include_tasks: identities.yml
+  vars:
+    odev_storage_identity_peer_names: "{{ odev_storage_present_clients | map(attribute='host') | unique | list }}"
+  when: odev_storage_present_config.shares | selectattr('state', 'equalto', 'present') | list | length > 0
+
 - name: Install the NFS server
   ansible.builtin.apt:
     name: nfs-kernel-server
@@ -57,12 +46,23 @@
 
 - name: Create directories only for present shares
   ansible.builtin.file:
-    path: "{{ item.value.export }}"
+    path: "{{ odev_storage_present_config.path ~ '/' ~ item.name }}"
     state: directory
     owner: root
     group: root
     mode: '0755'
-  loop: "{{ odev_storage_present_config.shares | dict2items | selectattr('value.state', 'equalto', 'present') | list }}"
+  loop: "{{ odev_storage_present_config.shares | selectattr('state', 'equalto', 'present') | list }}"
+
+- name: Create private login user directories on each present share
+  ansible.builtin.file:
+    path: "{{ odev_storage_present_config.path }}/{{ item.0.name }}/{{ item.1.item.name }}"
+    state: directory
+    owner: "{{ item.1.stdout.split(':')[2] }}"
+    group: "{{ item.1.stdout.split(':')[3] }}"
+    mode: '0700'
+  loop: "{{ odev_storage_present_config.shares | selectattr('state', 'equalto', 'present') | list | product(odev_storage_identity_accounts.results | default([])) | list }}"
+  loop_control:
+    label: "{{ item.0.name }}/{{ item.1.item.name }}"
 
 - name: Create the export configuration directory
   ansible.builtin.file:

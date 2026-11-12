@@ -23,24 +23,24 @@ class StorageMountTests(unittest.TestCase):
             # Run the real preflight, replacing only host operations with an
             # assertion that the real resolver produced the expected entries.
             stop=next(i for i,t in enumerate(tasks) if t['name']=='Gather client identity and virtualization facts')
-            tasks=tasks[:stop]+[{'name':'Verify resolved assignments','ansible.builtin.assert':{'that':['odev_storage_mount_resolved | length == expected_count',"odev_storage_mount_resolved[0].source == '192.0.2.10:/exports/scratch'"]}}]
+            tasks=tasks[:stop]+[{'name':'Verify resolved assignments','ansible.builtin.assert':{'that':['odev_storage_mount_resolved == expected_resolved']}}]
             configure.write_text(yaml.safe_dump(tasks,sort_keys=False))
             (root/'cmdb').mkdir()
             if file_present:
                 machine={} if assignments is None else {'storage':{'mounts':assignments}}
                 (root/'cmdb/client.yml').write_text(yaml.safe_dump(machine))
-            catalogue={'servers':[{'name':'storage-01','ip':'192.0.2.10','shares':{'scratch':{'state':share_state,'type':'nfs','export':'/exports/scratch'}}}]}
+            catalogue={'servers':[{'name':'storage-01','ip':'192.0.2.10','path':'/exports','shares':[{'name':'scratch','state':share_state,'type':'nfs'},{'name':'scratch_2','state':share_state,'type':'nfs'}]}]}
             (root/'cmdb/storage.yml').write_text(yaml.safe_dump(catalogue))
             (root/'ansible.cfg').write_text('[defaults]\nroles_path=./roles\n')
             # No usable connection: all preflight must run locally without SSH.
             (root/'hosts').write_text('client ansible_connection=local\n')
             (root/'play.yml').write_text('- hosts: all\n  gather_facts: false\n  roles:\n    - odev_storage_mount\n')
-            (root/'vars.json').write_text(json.dumps({'expected_count':len(assignments or [])}))
+            (root/'vars.json').write_text(json.dumps({'expected_resolved':[{'path':'/'+m['share'],'source':'192.0.2.10:/exports/'+m['share'],'state':m['state']} for m in (assignments or [])]}))
             run=subprocess.run(['ansible-playbook','-i','hosts','play.yml','-e','@vars.json'],cwd=root,env=dict(os.environ,ANSIBLE_CONFIG=str(root/'ansible.cfg'),ANSIBLE_LOCAL_TEMP=str(root/'tmp')),text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
             return run
 
     def entry(self, **changes):
-        result={'server':'storage-01','share':'scratch','mount_path':'/scratch','state':'present'}
+        result={'server':'storage-01','share':'scratch','state':'present'}
         result.update(changes)
         return result
 
@@ -55,8 +55,12 @@ class StorageMountTests(unittest.TestCase):
             r=self.run_case([self.entry(state=mount_state)],share_state=share_state)
             self.assertEqual(r.returncode,0,r.stdout)
 
+    def test_multiple_named_shares_derive_distinct_mount_paths(self):
+        r=self.run_case([self.entry(),self.entry(share='scratch_2')])
+        self.assertEqual(r.returncode,0,r.stdout)
+
     def test_invalid_configuration_is_rejected(self):
-        cases=[([self.entry()], 'absent'),([self.entry(server='unknown')],'present'),([self.entry(share='unknown')],'present'),([self.entry(),self.entry()],'present'),([self.entry(state='invalid')],'present'),([self.entry(mount_path='/')],'present'),([self.entry(mount_path='/scratch/../home')],'present')]
+        cases=[([self.entry()], 'absent'),([self.entry(server='unknown')],'present'),([self.entry(share='unknown')],'present'),([self.entry(),self.entry()],'present'),([self.entry(state='invalid')],'present'),([self.entry(mount_path='/')],'present'),([self.entry(share='../home')],'present')]
         for mounts,state in cases:
             with self.subTest(mounts=mounts,state=state):
                 r=self.run_case(mounts,share_state=state)

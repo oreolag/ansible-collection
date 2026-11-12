@@ -11,10 +11,18 @@
   ansible.builtin.set_fact:
     odev_storage_mount_server: "{{ odev_storage_mount_servers | selectattr('name', 'equalto', odev_storage_mount_assignment.server) | first }}"
 
+- name: Require named shares in the simplified storage schema
+  ansible.builtin.assert:
+    that:
+      - odev_storage_mount_server.shares is sequence
+      - odev_storage_mount_server.shares is not string
+      - odev_storage_mount_server.shares is not mapping
+    fail_msg: "Storage shares must be a list with explicit name fields and a server-level path."
+
 - name: Validate the share reference
   ansible.builtin.assert:
     that:
-      - odev_storage_mount_assignment.share in odev_storage_mount_server.shares
+      - odev_storage_mount_server.shares | selectattr('name', 'equalto', odev_storage_mount_assignment.share) | list | length == 1
     fail_msg: "Unknown share {{ odev_storage_mount_assignment.server }}/{{ odev_storage_mount_assignment.share }}."
 
 - name: Validate share state and NFS endpoint
@@ -25,14 +33,14 @@
       - odev_storage_mount_assignment.state == 'absent' or share.state == 'present'
       - odev_storage_mount_server.ip is string
       - odev_storage_mount_server.ip is match('^[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+$')
-      - share.export is match('^/[a-zA-Z0-9_-]+(/[a-zA-Z0-9_-]+)*$')
+      - odev_storage_mount_server.path is match('^/[a-zA-Z0-9_-]+(/[a-zA-Z0-9_-]+)*$')
     fail_msg: "Invalid NFS endpoint, unsupported type, or present mount referencing an absent share."
   vars:
-    share: "{{ odev_storage_mount_server.shares[odev_storage_mount_assignment.share] }}"
+    share: "{{ (odev_storage_mount_server.shares | selectattr('name', 'equalto', odev_storage_mount_assignment.share) | first) }}"
 
 - name: Record the resolved mount
   ansible.builtin.set_fact:
     odev_storage_mount_resolved: >-
-      {{ odev_storage_mount_resolved + [{'path': odev_storage_mount_assignment.mount_path,
-          'source': odev_storage_mount_server.ip ~ ':' ~ odev_storage_mount_server.shares[odev_storage_mount_assignment.share].export,
+      {{ odev_storage_mount_resolved + [{'path': '/' ~ odev_storage_mount_assignment.share,
+          'source': odev_storage_mount_server.ip ~ ':' ~ odev_storage_mount_server.path ~ '/' ~ odev_storage_mount_assignment.share,
           'state': odev_storage_mount_assignment.state}] }}

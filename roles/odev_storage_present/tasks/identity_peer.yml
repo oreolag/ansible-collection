@@ -1,0 +1,28 @@
+---
+- name: Resolve the peer management inventory entry
+  ansible.builtin.set_fact:
+    odev_storage_identity_candidates: "{{ groups['all'] | select('match', '^' ~ (odev_storage_identity_peer | regex_escape) ~ '([.]|$)') | list }}"
+
+- name: Require a usable peer inventory entry
+  ansible.builtin.assert:
+    that:
+      - odev_storage_identity_peer in odev_storage_identity_candidates or odev_storage_identity_candidates | length == 1
+    fail_msg: "Add a management inventory entry for storage participant {{ odev_storage_identity_peer }} to verify user IDs."
+
+- name: Read peer login account identities
+  ansible.builtin.command:
+    argv: [getent, passwd, "{{ item.item.name }}"]
+  delegate_to: "{{ odev_storage_identity_peer if odev_storage_identity_peer in odev_storage_identity_candidates else odev_storage_identity_candidates[0] }}"
+  become: true
+  become_user: root
+  loop: "{{ odev_storage_identity_accounts.results }}"
+  register: odev_storage_identity_peer_accounts
+  changed_when: false
+  check_mode: false
+
+- name: Require matching numeric UID and primary GID on both machines
+  ansible.builtin.assert:
+    that:
+      - item.stdout.split(':')[2:4] == item.item.stdout.split(':')[2:4]
+    fail_msg: "UID/GID mismatch for {{ item.item.item.name }} between {{ inventory_hostname }} and {{ odev_storage_identity_peer }}. Align identities before using private NFS directories; this role does not renumber accounts."
+  loop: "{{ odev_storage_identity_peer_accounts.results }}"

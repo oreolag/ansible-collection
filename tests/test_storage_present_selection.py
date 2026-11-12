@@ -26,7 +26,7 @@ class StorageSelectionTests(unittest.TestCase):
             return subprocess.run(['ansible-playbook', '-i', 'hosts', 'play.yml', '-e', 'oreol_target=all'], cwd=root, env=dict(os.environ, ANSIBLE_CONFIG=str(root/'ansible.cfg'), ANSIBLE_LOCAL_TEMP=str(root/'tmp')), text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
     def server(self, state='present'):
-        return {'name':'storage-01','ip':'192.0.2.10','shares':{'scratch':{'type':'nfs','state':state,'export':'/exports/scratch'}}}
+        return {'name':'storage-01','ip':'192.0.2.10','path':'/exports','shares':[{'name':'scratch','type':'nfs','state':state}]}
 
     def test_mixed_group_only_dispatches_declared_server(self):
         result = self.run_case([self.server()])

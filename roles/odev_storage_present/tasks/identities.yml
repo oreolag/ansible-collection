@@ -1,0 +1,36 @@
+---
+- name: Read login account declarations
+  ansible.builtin.set_fact:
+    odev_storage_identity_login: "{{ (users | default({})).login | default([]) }}"
+
+- name: Validate login account declarations
+  ansible.builtin.assert:
+    that:
+      - item.name is match('^[a-z_][a-z0-9_-]*[$]?$')
+      - item.name != 'root'
+      - item.state in ['present', 'absent']
+  loop: "{{ odev_storage_identity_login }}"
+
+- name: Read existing present login users and their numeric identities
+  ansible.builtin.command:
+    argv: [getent, passwd, "{{ item.name }}"]
+  loop: "{{ odev_storage_identity_login | selectattr('state', 'equalto', 'present') | list }}"
+  register: odev_storage_identity_accounts
+  changed_when: false
+  check_mode: false
+
+- name: Require distinct numeric user IDs
+  ansible.builtin.assert:
+    that:
+      - uids | unique | length == uids | length
+      - "'0' not in uids"
+    fail_msg: "Present login users must have distinct non-root UIDs."
+  vars:
+    uids: "{{ odev_storage_identity_accounts.results | map(attribute='stdout') | map('split', ':') | map(attribute='2') | list }}"
+
+- name: Compare account identities with each participating peer
+  ansible.builtin.include_tasks: identity_peer.yml
+  loop: "{{ odev_storage_identity_peer_names | unique | difference([inventory_hostname_short]) | list }}"
+  loop_control:
+    loop_var: odev_storage_identity_peer
+  when: odev_storage_identity_accounts.results | length > 0

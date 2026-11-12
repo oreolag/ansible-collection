@@ -16,13 +16,13 @@
     - name: Validate client share references and management addresses
       ansible.builtin.assert:
         that:
-          - item.share in odev_storage_present_config.shares
-          - odev_storage_present_config.shares[item.share].state == 'present'
+          - odev_storage_present_config.shares | selectattr('name', 'equalto', item.share) | list | length == 1
+          - (odev_storage_present_config.shares | selectattr('name', 'equalto', item.share) | first).state == 'present'
           - client.devices.enmgmt[0].access[0].ip_address is match('^[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+$')
         fail_msg: "Present mount references an absent/unknown share or invalid management IPv4 in {{ odev_storage_present_client_file }}."
       loop: "{{ mounts | selectattr('state', 'equalto', 'present') | list }}"
 
     - name: Record authorized client IPs
       ansible.builtin.set_fact:
-        odev_storage_present_clients: "{{ odev_storage_present_clients + [{'share': item.share, 'ip': client.devices.enmgmt[0].access[0].ip_address}] }}"
+        odev_storage_present_clients: "{{ odev_storage_present_clients + [{'share': item.share, 'ip': client.devices.enmgmt[0].access[0].ip_address, 'host': odev_storage_present_client_file | basename | splitext | first}] }}"
       loop: "{{ mounts | selectattr('state', 'equalto', 'present') | list }}"
