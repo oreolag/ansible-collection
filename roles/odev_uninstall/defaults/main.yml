@@ -1,0 +1,3 @@
+---
+# Parent directory used by the CLI installer. Only known CLI paths are removed.
+odev_uninstall_prefix: /opt

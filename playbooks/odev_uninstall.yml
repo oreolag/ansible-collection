@@ -1,0 +1,9 @@
+---
+- name: Uninstall the Oreol CLI and its system integration
+  hosts: "{{ oreol_target }}"
+  gather_facts: true
+  become: true
+  strategy: linear
+  any_errors_fatal: true
+  roles:
+    - oreol.mgmt.odev_uninstall

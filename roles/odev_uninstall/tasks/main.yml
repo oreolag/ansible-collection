@@ -1,0 +1,77 @@
+---
+- name: Require a Linux systemd host
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.system == 'Linux'
+      - ansible_facts.service_mgr == 'systemd'
+
+- name: Find the controller booking catalogue
+  ansible.builtin.set_fact:
+    odev_uninstall_catalogues: "{{ query('ansible.builtin.fileglob', inventory_dir ~ '/cmdb/booking.yml') }}"
+
+- name: Inspect booking dependencies and retained group ownership before removal
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/python3
+      - -B
+      - -c
+      - "{{ lookup('ansible.builtin.file', role_path ~ '/files/preflight.py') }}"
+    stdin: >-
+      {{ {'prefix': odev_uninstall_prefix, 'hostname': ansible_facts.hostname,
+          'booking_catalogue': lookup('ansible.builtin.file', odev_uninstall_catalogues[0]) if odev_uninstall_catalogues else ''} | to_json }}
+  register: odev_uninstall_inspection
+  changed_when: false
+  check_mode: false
+
+- name: Resolve the uninstall plan
+  ansible.builtin.set_fact:
+    odev_uninstall_plan: "{{ odev_uninstall_inspection.stdout | from_json }}"
+
+- name: Refuse uninstall when booking or retained files still require the CLI groups
+  ansible.builtin.assert:
+    that:
+      - odev_uninstall_plan.errors | length == 0
+    fail_msg: "{{ odev_uninstall_plan.errors | join('\n') }}"
+
+- name: Read service and timer unit load states
+  ansible.builtin.command:
+    argv: [systemctl, show, --property=LoadState, --value, "{{ item }}"]
+  loop: "{{ odev_uninstall_plan.units }}"
+  register: odev_uninstall_unit_states
+  changed_when: false
+  check_mode: false
+  failed_when: odev_uninstall_unit_states.rc != 0 and odev_uninstall_unit_states.stdout | trim != 'not-found'
+
+- name: Stop and disable CLI booking timers and services
+  ansible.builtin.systemd_service:
+    name: "{{ item.item }}"
+    state: stopped
+    enabled: false
+  loop: "{{ odev_uninstall_unit_states.results }}"
+  when: item.stdout | trim != 'not-found'
+
+- name: Remove only the CLI PATH export from the system bash configuration
+  ansible.builtin.lineinfile:
+    path: /etc/bash.bashrc
+    line: "export ODEV_PATH={{ odev_uninstall_prefix }}/odev"
+    state: absent
+
+- name: Remove CLI files and system integration
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ odev_uninstall_plan.remove_paths }}"
+  register: odev_uninstall_files
+
+- name: Reload systemd after removing CLI unit files
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when: odev_uninstall_files is changed
+
+# Delete groups last, after CLI-owned files and services have been removed.
+# groupdel also removes their supplementary memberships, not login accounts.
+- name: Remove odev groups and their memberships
+  ansible.builtin.group:
+    name: "{{ item }}"
+    state: absent
+  loop: "{{ odev_uninstall_plan.groups }}"
