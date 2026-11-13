@@ -33,6 +33,14 @@
     group: root
     mode: "0644"
 
+- name: Copy odev user-data configuration
+  ansible.builtin.copy:
+    src: "{{ inventory_dir }}/cmdb/odev_path.yml"
+    dest: "{{ cmdb.remote_path }}/odev_path.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
 - name: Remove duplicate booking inventory from CMDB folder
   ansible.builtin.file:
     path: "{{ cmdb.remote_path }}/cmdb/booking.yml"
