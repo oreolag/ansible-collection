@@ -1,0 +1,13 @@
+---
+- name: Check supported operating system
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] in ['Ubuntu', 'Debian']
+    fail_msg: "Tailscale updates require Ubuntu or Debian"
+
+- name: Update installed Tailscale package
+  ansible.builtin.apt:
+    name: tailscale
+    state: latest
+    only_upgrade: true
+    update_cache: true
