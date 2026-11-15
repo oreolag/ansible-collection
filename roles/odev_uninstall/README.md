@@ -46,7 +46,8 @@ ownership changes or automatic user/GID renumbering occur.
 - Refuse if a group to be removed is any account's primary group.
 - Refuse if any retained path is owned by a group to be removed. The ownership
   scan includes home and shared filesystems; only known removal paths and virtual
-  `/proc`, `/sys`, `/dev` trees are excluded. Inaccessible paths cause failure,
+  `/proc`, `/sys`, `/dev` trees and verified `fuse.portal` document portal mounts
+  at `/run/user/<uid>/doc` are excluded. Other inaccessible paths cause failure,
   not an assumption that removal is safe. Large filesystems may take time to scan.
 
 These checks run in check mode too. No removal starts on the host until they

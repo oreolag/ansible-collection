@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import pwd
+import re
 import sys
 
 GROUPS = ("odev-users", "odev-developers", "odev-admins")
@@ -81,6 +82,23 @@ def inspect(config, root=Path("/"), group_entries=None, passwd_entries=None):
             errors.append("Group " + gids[user.pw_gid] + " is the primary group of " + user.pw_name + "; reassign it explicitly first.")
     if not errors and gids:
         excluded = paths + ["/proc", "/sys", "/dev"]
+        # Desktop document portals expose virtual files through a user-only
+        # FUSE mount. Even root may be denied access; these are not retained
+        # filesystem trees. Identify the mount type rather than ignoring all
+        # permission errors or all of /run.
+        mountinfo = local("/proc/self/mountinfo")
+        try:
+            if mountinfo.exists():
+                for line in mountinfo.read_text().splitlines():
+                    fields, separator, filesystem = line.partition(" - ")
+                    fields = fields.split()
+                    filesystem = filesystem.split()
+                    if separator and len(fields) >= 5 and filesystem and filesystem[0] == "fuse.portal":
+                        mountpoint = re.sub(r"\\([0-7]{3})", lambda match: chr(int(match[1], 8)), fields[4])
+                        if re.fullmatch(r"/run/user/[0-9]+/doc", mountpoint):
+                            excluded.append(mountpoint)
+        except OSError as error:
+            errors.append("Cannot inspect filesystem mounts: " + str(error))
         def managed(path):
             return any(path == entry or path.startswith(entry + "/") for entry in excluded)
         def scan_error(error):

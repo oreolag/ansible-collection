@@ -90,6 +90,22 @@ class UninstallPreflightTests(unittest.TestCase):
             self.assertEqual(self.inspect()['errors'],[])
         self.assertEqual(cli.read_text(),'code')
 
+    def test_only_verified_document_portal_mounts_are_skipped(self):
+        portal = self.write('/run/user/1000/doc/document', 'virtual')
+        self.write('/proc/self/mountinfo',
+                   '42 21 0:40 / /run/user/1000/doc rw - fuse.portal portal rw\n')
+        original = os.scandir
+        def scandir(path):
+            if Path(path) == portal.parent:
+                raise PermissionError(13, 'Permission denied', str(path))
+            return original(path)
+        with patch.object(preflight.os, 'scandir', side_effect=scandir):
+            self.assertEqual(self.inspect()['errors'], [])
+            # The same path must still be checked without a portal mount.
+            (self.root / 'proc/self/mountinfo').write_text('')
+            self.assertTrue(any('Cannot inspect filesystem ownership' in error
+                                for error in self.inspect()['errors']))
+
     def test_unreadable_filesystem_fails_closed(self):
         def walk(root, **kwargs):
             kwargs['onerror'](PermissionError('cannot read retained storage'))
