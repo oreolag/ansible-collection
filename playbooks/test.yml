@@ -1,8 +1,9 @@
 ---
 - name: Test Ansible connectivity and show server information
   hosts: "{{ oreol_target }}"
-  become: false
   gather_facts: true
+  vars:
+    ansible_become: false
 
   tasks:
     - name: Show server information
