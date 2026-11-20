@@ -1,0 +1,53 @@
+---
+- name: Check supported operating system
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] in ['Ubuntu', 'Debian']
+    fail_msg: "GitHub CLI installation requires Ubuntu or Debian"
+
+- name: Install repository prerequisites
+  ansible.builtin.apt:
+    name: ca-certificates
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Read Debian package architecture
+  ansible.builtin.command:
+    argv: [dpkg, --print-architecture]
+  register: gh_install_architecture
+  changed_when: false
+  check_mode: false
+
+- name: Create package keyring directory
+  ansible.builtin.file:
+    path: /usr/share/keyrings
+    state: directory
+    mode: "0755"
+
+- name: Add GitHub CLI package signing key
+  ansible.builtin.get_url:
+    url: https://cli.github.com/packages/githubcli-archive-keyring.gpg
+    dest: /usr/share/keyrings/githubcli-archive-keyring.gpg
+    mode: "0644"
+
+- name: Create APT sources directory
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d
+    state: directory
+    mode: "0755"
+
+- name: Add GitHub CLI package repository
+  ansible.builtin.copy:
+    content: |
+      deb [arch={{ gh_install_architecture.stdout | trim }} signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main
+    dest: /etc/apt/sources.list.d/github-cli.list
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install GitHub CLI
+  ansible.builtin.apt:
+    name: gh
+    state: present
+    update_cache: true
