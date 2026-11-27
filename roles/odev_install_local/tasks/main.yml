@@ -10,11 +10,7 @@
     local_path: "{{ (cli | default({})).local_path | default('') }}"
     validate_only: true
 
-- name: Run the local CLI installation playbook
+- name: Run the local CLI installation with MGMT's ansible-play.sh
   oreol.mgmt.odev_local_playbook:
     local_path: "{{ cli.local_path }}"
-  register: odev_install_local_result
-
-- name: Show local CLI installation output
-  ansible.builtin.debug:
-    var: odev_install_local_result.stdout_lines
+  run_once: true

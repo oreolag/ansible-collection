@@ -1,5 +1,6 @@
 """Exercise the local installer with disposable inventories and harmless plays."""
 import importlib.util
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -48,8 +49,24 @@ class LocalInstallTests(unittest.TestCase):
         }], sort_keys=False))
         config = self.root / 'ansible.cfg'
         config.write_text('[defaults]\nretry_files_enabled = False\n')
+        self.mgmt = self.root / 'mgmt'
+        self.mgmt.mkdir()
+        self.wrapper_trace = self.root / 'wrapper-arguments.json'
+        # Record the call, then perform the same playbook/target handoff as MGMT.
+        wrapper = self.mgmt / 'ansible-play.sh'
+        wrapper.write_text('''#!/usr/bin/env python3
+import json, os, sys
+with open(os.environ['WRAPPER_TRACE'], 'w') as output:
+    json.dump(sys.argv[1:], output)
+playbook, target, *options = sys.argv[1:]
+os.execv(os.environ['TEST_PYTHON'], [os.environ['TEST_PYTHON'], '-m',
+         'ansible.cli.playbook', playbook, '--limit', target, *options])
+''')
+        wrapper.chmod(0o755)
         self.env = dict(os.environ, ANSIBLE_COLLECTIONS_PATH=str(self.root),
-                        ANSIBLE_CONFIG=str(config), ANSIBLE_NOCOLOR='1')
+                        ANSIBLE_CONFIG=str(config), ANSIBLE_NOCOLOR='1',
+                        OMGMT_PATH=str(self.mgmt), WRAPPER_TRACE=str(self.wrapper_trace),
+                        TEST_PYTHON=sys.executable, PYTHONUNBUFFERED='1')
 
     def configure(self, values):
         self.variables.write_text(yaml.safe_dump(values))
@@ -67,6 +84,12 @@ class LocalInstallTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(self.marker.read_text(), 'local source')
         self.assertNotIn('excluded :', result.stdout)
+        arguments = json.loads(self.wrapper_trace.read_text())
+        self.assertEqual(arguments[:2], [str(self.checkout / 'install.yml'), 'selected'])
+        self.assertIn(str(self.inventory), arguments)
+        self.assertIn('main=true src=true booking=true', arguments)
+        self.assertEqual(json.loads(arguments[-1]), {'cli': {'local_path': str(self.checkout)}})
+        self.assertNotIn('stdout_lines', result.stdout)
 
     def test_check_mode_is_forwarded_and_does_not_write(self):
         result = self.run_play('--check', '--diff')
@@ -109,10 +132,57 @@ class LocalInstallTests(unittest.TestCase):
 
     def test_arguments_preserve_options_and_narrow_limit(self):
         args = ['wrapper.yml', '-i', 'hosts', '-e', 'main=true', '--check', '--', 'unused']
-        forwarded = plugin.playbook_arguments(args, ['wrapper.yml'], '/local/install.yml', 'node')
-        self.assertEqual(forwarded, ['/local/install.yml', '-i', 'hosts', '-e',
-                                    'main=true', '--check', '--limit', 'node', '--', 'unused'])
+        forwarded = plugin.playbook_arguments(args, ['wrapper.yml'], '/local/install.yml', 'node', '/mgmt/ansible-play.sh')
+        self.assertEqual(forwarded, ['/mgmt/ansible-play.sh', '/local/install.yml', 'node',
+                                    '-i', 'hosts', '-e', 'main=true', '--check', '--limit', 'node',
+                                    '--extra-vars', '{"cli": {"local_path": "/local"}}', '--', 'unused'])
         self.assertEqual(args[0], 'wrapper.yml')
+
+    def test_missing_mgmt_wrapper_fails_before_execution(self):
+        (self.mgmt / 'ansible-play.sh').unlink()
+        result = self.run_play()
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn('ansible-play.sh was not found', result.stdout)
+        self.assertFalse(self.marker.exists())
+
+    def test_multiple_hosts_use_one_wrapper_call(self):
+        (self.checkout / 'install.yml').write_text(yaml.safe_dump([{
+            'hosts': 'all', 'gather_facts': False,
+            'tasks': [{'ansible.builtin.copy': {
+                'content': 'local source',
+                'dest': str(self.root) + '/installed-{{ inventory_hostname }}',
+            }}],
+        }]))
+        result = self.run_play('--limit', 'servers')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        arguments = json.loads(self.wrapper_trace.read_text())
+        self.assertEqual(arguments[1], 'selected,excluded')
+        for host in ('selected', 'excluded'):
+            self.assertEqual((self.root / ('installed-' + host)).read_text(), 'local source')
+        self.assertEqual(result.stdout.count('PLAY [all]'), 1)
+
+    def test_installation_output_is_live(self):
+        (self.checkout / 'install.yml').write_text(yaml.safe_dump([{
+            'hosts': 'all', 'gather_facts': False, 'tasks': [
+                {'ansible.builtin.debug': {'msg': 'LIVE_INSTALLATION_OUTPUT'}},
+                {'ansible.builtin.command': {
+                    'argv': [sys.executable, '-c', 'import time; time.sleep(1)']}},
+                {'ansible.builtin.copy': {'content': 'done', 'dest': str(self.marker)}},
+            ],
+        }]))
+        command = [sys.executable, '-m', 'ansible.cli.playbook',
+                   'oreol.mgmt.odev_install_local', '-i', str(self.inventory),
+                   '--limit', 'selected', '-e', 'oreol_target=servers']
+        with subprocess.Popen(command, env=self.env, text=True, stdout=subprocess.PIPE,
+                              stderr=subprocess.STDOUT) as process:
+            received_before_completion = False
+            output = []
+            for line in process.stdout:
+                output.append(line)
+                if 'LIVE_INSTALLATION_OUTPUT' in line:
+                    received_before_completion = process.poll() is None and not self.marker.exists()
+            self.assertEqual(process.wait(), 0, ''.join(output))
+            self.assertTrue(received_before_completion, ''.join(output))
 
 
 if __name__ == '__main__':
