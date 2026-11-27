@@ -1,0 +1,9 @@
+---
+- name: Install Oreol CLI from a controller checkout
+  hosts: "{{ oreol_target }}"
+  gather_facts: false
+  any_errors_fatal: true
+
+  roles:
+    - role: oreol.mgmt.odev_install_local
+      tags: always

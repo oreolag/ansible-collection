@@ -1,0 +1,20 @@
+---
+- name: Require local file installation rather than repository installation
+  ansible.builtin.assert:
+    that:
+      - not (repo | default(false) | bool)
+    fail_msg: "odev_install_local does not support repo=true; select local components such as main, src, or booking."
+
+- name: Validate the local CLI checkout before installation
+  oreol.mgmt.odev_local_playbook:
+    local_path: "{{ (cli | default({})).local_path | default('') }}"
+    validate_only: true
+
+- name: Run the local CLI installation playbook
+  oreol.mgmt.odev_local_playbook:
+    local_path: "{{ cli.local_path }}"
+  register: odev_install_local_result
+
+- name: Show local CLI installation output
+  ansible.builtin.debug:
+    var: odev_install_local_result.stdout_lines
