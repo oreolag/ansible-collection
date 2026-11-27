@@ -1,16 +1,87 @@
 ---
-- name: Require local file installation rather than repository installation
+- name: Validate the configured local CLI path
   ansible.builtin.assert:
     that:
+      - cli is defined
+      - cli is mapping
+      - cli.local_path is defined
+      - cli.local_path is string
+      - cli.local_path | trim | length > 0
+      - cli.local_path.startswith('/')
+    fail_msg: "Set cli.local_path to an absolute checkout path in the cluster's group_vars/all/main.yml."
+
+- name: Check the controller checkout and MGMT wrapper
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ cli.local_path }}"
+    - "{{ cli.local_path }}/install.yml"
+    - "{{ lookup('ansible.builtin.env', 'OMGMT_PATH') }}/ansible-play.sh"
+  delegate_to: localhost
+  become: false
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+  register: odev_install_local_paths
+
+- name: Require the checkout, installer, and selected cluster inventory
+  ansible.builtin.assert:
+    that:
+      - odev_install_local_paths.results[0].stat.isdir | default(false)
+      - odev_install_local_paths.results[1].stat.isreg | default(false)
+      - lookup('ansible.builtin.env', 'OMGMT_PATH') | length > 0
+      - odev_install_local_paths.results[2].stat.executable | default(false)
+      - ansible_inventory_sources | length == 1
       - not (repo | default(false) | bool)
-    fail_msg: "odev_install_local does not support repo=true; select local components such as main, src, or booking."
+      - cli.local_path == hostvars[ansible_play_hosts_all[0]].cli.local_path
+    fail_msg: "Run through omgmt with one cluster inventory, an existing local install.yml, the same cli.local_path for all selected hosts, and without repo=true."
 
-- name: Validate the local CLI checkout before installation
-  oreol.mgmt.odev_local_playbook:
-    local_path: "{{ (cli | default({})).local_path | default('') }}"
-    validate_only: true
+- name: Select local installation component flags
+  ansible.builtin.set_fact:
+    odev_install_local_selected_flags: >-
+      {%- if odev_install_local_flags | default('') | length > 0 -%}
+      {{ odev_install_local_flags.split(',') | reject('equalto', '') | list }}
+      {%- else -%}
+      {%- set selected = namespace(flags=[]) -%}
+      {%- for component in ['all', 'build', 'create', 'delete', 'examine', 'get',
+          'ifconfig', 'install', 'main', 'program', 'reserve', 'run', 'set', 'src',
+          'sudoers_d', 'update', 'validate', 'vars_yml', 'gh', 'submodules',
+          'templates', 'booking', 'hdev', 'playbooks', 'workflows'] -%}
+      {%- if lookup('ansible.builtin.vars', component, default=false) | bool -%}
+      {%- set selected.flags = selected.flags + [component] -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ selected.flags }}
+      {%- endif -%}
 
-- name: Run the local CLI installation with MGMT's ansible-play.sh
-  oreol.mgmt.odev_local_playbook:
-    local_path: "{{ cli.local_path }}"
+- name: Require local component flags
+  ansible.builtin.assert:
+    that:
+      - "'repo' not in odev_install_local_selected_flags"
+      - odev_install_local_selected_flags == hostvars[ansible_play_hosts_all[0]].odev_install_local_selected_flags
+    fail_msg: "Select the same local component flags for every host; repo is not a local component."
+
+- name: Install CLI using the same command as cli_install_macos.sh
+  ansible.builtin.shell: |
+    exec ./ansible-play.sh \
+      {{ (cli.local_path ~ '/install.yml') | quote }} \
+      {{ (ansible_play_hosts_all | join(',')) | quote }} \
+      {{ (odev_install_local_selected_flags | join(',')) | quote }} \
+      -i {{ ansible_inventory_sources[0] | quote }} \
+      --extra-vars {{ {'cli': {'local_path': cli.local_path}} | to_json | quote }} \
+      {{ '--check' if ansible_check_mode else '' }} {{ '--diff' if ansible_diff_mode | default(false) else '' }}
+  args:
+    chdir: "{{ lookup('ansible.builtin.env', 'OMGMT_PATH') }}"
+    executable: /bin/bash
+  delegate_to: localhost
+  become: false
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+  run_once: true
+  check_mode: false
+  changed_when: not ansible_check_mode
+  register: odev_install_local_result
+
+- name: Show completed CLI installation output
+  ansible.builtin.debug:
+    msg: "{{ odev_install_local_result.stdout }}"
   run_once: true

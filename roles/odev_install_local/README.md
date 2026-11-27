@@ -37,30 +37,37 @@ your checkout's `install.yml`; the example matches `cli_install_macos.sh`.
 instead of local file installation. Provision prerequisites with `odev_install`
 first if your checkout's selected tasks require them.
 
-The role calls MGMT's existing `ansible-play.sh` once for all selected hosts,
-following the same approach as `cli_install_macos.sh`:
+The role contains a normal controller-side shell task that calls MGMT's existing
+`ansible-play.sh` once for all selected hosts, like `cli_install_macos.sh`:
 
 ```bash
-"$OMGMT_PATH/ansible-play.sh" \
-  "$CLI_LOCAL_PATH/install.yml" "$SELECTED_HOSTS" \
-  -i "$CLUSTER_INVENTORY" \
-  --extra-vars '{"cli":{"local_path":"<the configured checkout>"}}'
+exec ./ansible-play.sh \
+  "<cli.local_path>/install.yml" "<selected hosts>" "main,src,booking" \
+  -i "<selected cluster inventory>" \
+  --extra-vars '{"cli":{"local_path":"<cli.local_path>"}}'
 ```
 
-Here `CLI_LOCAL_PATH` means the configured `cli.local_path`; it is not a required
-environment variable. `omgmt` sets `OMGMT_PATH` to its software directory. The
-runner requires that directory's executable `ansible-play.sh`; it does not fall
-back to launching Ansible directly. The selected hosts must share one checkout.
+The task runs in `OMGMT_PATH`, which omgmt sets to its software directory, using
+`delegate_to: localhost`, `become: false`, and `run_once: true`. There is no custom
+Python runner. Hosts selected together must share the same checkout and component
+flags. One cluster inventory is required.
 
-The original inventory, component flags (already represented as extra variables
-by omgmt), SSH settings, Vault files, tags, and check/diff options are forwarded.
+For an explicit comma-separated component list, use:
+
+```bash
+omgmt run playbook --name odev_install_local --hosts <host-or-group> \
+  --vars 'odev_install_local_flags=main,src,booking'
+```
+
+Otherwise, supported boolean component variables such as `main`, `src`, and
+`booking` are converted to the comma-separated flags accepted by ansible-play.sh.
+The wrapper supplies the component variables to the checkout's playbook.
+
 The checkout's relative includes and privilege-escalation settings are retained.
-Normal installation output is streamed live, without a final debug array. The
-collection's validation tasks and outer play recap still appear. A nonzero wrapper
-exit code fails the role.
+Check/diff mode is passed through. Other settings should come from the selected
+inventory or Ansible environment; this simplified task does not forward arbitrary
+outer command-line options or extra variables. Use noninteractive inventory or
+environment-based credentials rather than password prompts.
 
-Invoke a single outer playbook at a time. Interactive password prompts are not
-supported by the nested invocation: use inventory credentials or password files.
-Do not run this role with a controller connection delegated to a different
-machine. Whether selected installation tasks work in check mode is determined
-by the checkout's playbook.
+As with a normal Ansible shell task, output is collected and displayed after the
+command finishes. A nonzero exit code fails the role with the command output.
