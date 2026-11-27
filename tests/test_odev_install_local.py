@@ -93,6 +93,29 @@ os.execv(os.environ['TEST_PYTHON'], [os.environ['TEST_PYTHON'], '-m',
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertFalse(self.marker.exists())
 
+    def test_inventory_become_does_not_enable_controller_sudo(self):
+        sudo_marker = self.root / 'sudo-was-called'
+        sudo = self.root / 'forbidden-sudo'
+        sudo.write_text('#!/bin/sh\ntouch ' + str(sudo_marker) + '\nexit 1\n')
+        sudo.chmod(0o755)
+        self.configure({
+            'cli': {'local_path': str(self.checkout)},
+            'ansible_become': True,
+            'ansible_become_method': 'sudo',
+            'ansible_become_exe': str(sudo),
+        })
+        installer = self.checkout / 'install.yml'
+        playbook = yaml.safe_load(installer.read_text())
+        # The child retains remote become settings. Only this harmless fixture's
+        # local file write disables them, so the test never actually needs sudo.
+        playbook[0]['tasks'][0]['ansible.builtin.assert']['that'].append('ansible_become | bool')
+        playbook[0]['tasks'][1]['vars'] = {'ansible_become': False}
+        installer.write_text(yaml.safe_dump(playbook))
+        result = self.run_play()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.marker.read_text(), 'local source')
+        self.assertFalse(sudo_marker.exists())
+
     def test_missing_empty_whitespace_and_invalid_paths_fail_before_execution(self):
         for config in ({}, {'cli': {}}, {'cli': {'local_path': ''}},
                        {'cli': {'local_path': '   '}},

@@ -20,6 +20,8 @@
   delegate_to: localhost
   become: false
   vars:
+    ansible_become: false
+    ansible_connection: local
     ansible_python_interpreter: "{{ ansible_playbook_python }}"
   register: odev_install_local_paths
 
@@ -75,6 +77,8 @@
   delegate_to: localhost
   become: false
   vars:
+    ansible_become: false
+    ansible_connection: local
     ansible_python_interpreter: "{{ ansible_playbook_python }}"
   run_once: true
   check_mode: false
